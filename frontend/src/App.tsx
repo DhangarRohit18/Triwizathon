@@ -4,6 +4,7 @@ import { useAppStore } from './store/useAppStore';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { ToastContainer } from './components/ToastContainer';
+import { RoleGuard } from './components/RoleGuard';
 
 // Pages
 import { DashboardPage } from './pages/DashboardPage';
@@ -14,9 +15,12 @@ import { IoTPage } from './pages/IoTPage';
 import { QRScannerPage } from './pages/QRScannerPage';
 import { WhatsAppPage } from './pages/WhatsAppPage';
 import { UsersPage } from './pages/UsersPage';
+import { LoginPage } from './pages/LoginPage';
+
+import { api } from './services/api';
 
 export const App: React.FC = () => {
-  const { theme } = useAppStore();
+  const { theme, setUser } = useAppStore();
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -26,34 +30,111 @@ export const App: React.FC = () => {
     }
   }, [theme]);
 
+  // Ensure an authenticated signed session is bootstrapped seamlessly
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      const curToken = localStorage.getItem('stockpilot_token');
+      if (!curToken || curToken === 'demo_token') {
+        try {
+          const activeRole = useAppStore.getState().activeRole || 'supply_chain_manager';
+          const res = await api.auth.switchRole(activeRole);
+          setUser(res.user, res.access_token);
+        } catch (e) {
+          console.warn('Initial session bootstrap fallback:', e);
+        }
+      }
+    };
+    bootstrapAuth();
+  }, [setUser]);
+
   return (
     <BrowserRouter>
-      <div className="min-h-screen flex bg-slate-100 dark:bg-[#07090e] text-slate-900 dark:text-slate-100 antialiased industrial-grid">
-        {/* Persistent Collapsible Sidebar */}
-        <Sidebar />
+      <Routes>
+        {/* Dedicated 6-Role Login Portal */}
+        <Route path="/login" element={<LoginPage />} />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <Navbar />
+        {/* Authenticated Workspace Layout */}
+        <Route
+          path="/*"
+          element={
+            <div className="min-h-screen flex bg-white text-slate-900 antialiased industrial-grid">
+              {/* Persistent Collapsible Sidebar with Dynamic Role-Filtered Navigation */}
+              <Sidebar />
 
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/optimizer" element={<OptimizerPage />} />
-              <Route path="/forecasting" element={<ForecastingPage />} />
-              <Route path="/inventory" element={<InventoryPage />} />
-              <Route path="/iot" element={<IoTPage />} />
-              <Route path="/qr" element={<QRScannerPage />} />
-              <Route path="/whatsapp" element={<WhatsAppPage />} />
-              <Route path="/users" element={<UsersPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        </div>
+              {/* Main Content Area */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <Navbar />
 
-        {/* Global Toast Notifications */}
-        <ToastContainer />
-      </div>
+                <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+                  <Routes>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route 
+                      path="/optimizer" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager']}>
+                          <OptimizerPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/forecasting" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager']}>
+                          <ForecastingPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/inventory" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager', 'distributor', 'operator']}>
+                          <InventoryPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/iot" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'warehouse_manager']}>
+                          <IoTPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/qr" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'warehouse_manager', 'distributor', 'operator']}>
+                          <QRScannerPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/whatsapp" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager']}>
+                          <WhatsAppPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/users" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin']}>
+                          <UsersPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </main>
+              </div>
+            </div>
+          }
+        />
+      </Routes>
+
+      {/* Global Toast Notifications */}
+      <ToastContainer />
     </BrowserRouter>
   );
 };

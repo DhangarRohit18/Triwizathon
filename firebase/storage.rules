@@ -1,0 +1,42 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOrgMember(orgId) {
+      return isAuthenticated() && 
+        (request.auth.token.org_id == orgId || 
+         request.auth.token.role == 'super_admin');
+    }
+    
+    function isValidEvidenceFile() {
+      return request.resource.size < 10 * 1024 * 1024 && // Max 10MB
+             (request.resource.contentType.matches('image/.*') ||
+              request.resource.contentType == 'application/pdf');
+    }
+
+    // Organization-scoped Evidence Photos and Documents
+    match /organizations/{orgId}/{allPaths=**} {
+      allow read: if isOrgMember(orgId);
+      allow create: if isOrgMember(orgId) && isValidEvidenceFile();
+      allow update: if isOrgMember(orgId) && isValidEvidenceFile();
+      allow delete: if isAuthenticated() && 
+                       (request.auth.token.role in ['super_admin', 'org_admin']);
+    }
+
+    // Specific sub-paths
+    match /organizations/{orgId}/damage_evidence/{filename} {
+      allow read: if isOrgMember(orgId);
+      allow write: if isOrgMember(orgId) && isValidEvidenceFile();
+    }
+
+    match /organizations/{orgId}/temperature_logs/{filename} {
+      allow read: if isOrgMember(orgId);
+      allow write: if isOrgMember(orgId) && isValidEvidenceFile();
+    }
+  }
+}

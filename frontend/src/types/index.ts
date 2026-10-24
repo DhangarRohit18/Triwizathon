@@ -13,6 +13,8 @@ export interface User {
   role: RoleType;
   org_id: string;
   warehouse_id?: string | null;
+  warehouse_ids?: string[] | null;
+  permissions?: string[] | null;
   phone_number?: string | null;
   is_active: boolean;
   created_at: string;
@@ -104,6 +106,8 @@ export interface InventoryBatch {
   qr_code_id: string;
   status: string;
 }
+
+export type Batch = InventoryBatch;
 
 export interface InventoryMovement {
   id: string;

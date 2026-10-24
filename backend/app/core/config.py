@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     ]
     
     # Firebase configuration
-    FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "stockpilot-ai-triwiz")
+    FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "triwizathon")
     FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
     USE_FIREBASE_MOCK: bool = os.getenv("USE_FIREBASE_MOCK", "true").lower() in ("true", "1", "yes")
     

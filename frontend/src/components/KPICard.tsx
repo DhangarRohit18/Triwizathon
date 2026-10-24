@@ -1,5 +1,8 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
+import { SmoothCard } from './ui/SmoothCard';
+import { NumberTicker } from './ui/NumberTicker';
+import { RetroBadge } from './ui/RetroBadge';
 
 interface KPICardProps {
   title: string;
@@ -9,6 +12,7 @@ interface KPICardProps {
   isPositive?: boolean;
   icon: LucideIcon;
   badge?: string;
+  ticker?: boolean;
 }
 
 export const KPICard: React.FC<KPICardProps> = ({
@@ -16,38 +20,46 @@ export const KPICard: React.FC<KPICardProps> = ({
   value,
   subtitle,
   change,
-  isPositive,
+  isPositive = true,
   icon: Icon,
   badge,
+  ticker = true,
 }) => {
+  const numericVal = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.-]+/g, ''));
+  const isNumeric = !isNaN(numericVal) && ticker;
+
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-4 shadow-sm hover:border-sky-500/40 transition-colors">
+    <SmoothCard className="p-4 transition-all duration-150">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#17324D]/70">
           {title}
         </span>
         <div className="flex items-center gap-1.5">
           {badge && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-500/10 text-sky-500 border border-sky-500/20">
+            <RetroBadge variant="teal" size="sm">
               {badge}
-            </span>
+            </RetroBadge>
           )}
-          <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-sky-400">
+          <div className="p-2 rounded-lg bg-[#0D9488]/8 border border-[#0D9488]/20 text-[#0D9488]">
             <Icon className="w-4 h-4" />
           </div>
         </div>
       </div>
 
       <div className="flex items-baseline justify-between">
-        <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 font-mono-num">
-          {value}
+        <div className="text-2xl font-bold tracking-tight text-[#17324D] font-mono-num">
+          {isNumeric ? (
+            <NumberTicker value={numericVal} />
+          ) : (
+            value
+          )}
         </div>
         {change && (
           <span
-            className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+            className={`text-xs font-mono font-semibold px-2 py-0.5 rounded border ${
               isPositive
-                ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
-                : 'text-rose-700 dark:text-rose-400 bg-rose-500/10'
+                ? 'text-[#0D9488] bg-[#0D9488]/8 border-[#0D9488]/25'
+                : 'text-[#17324D] bg-[#17324D]/5 border-[#17324D]/20'
             }`}
           >
             {change}
@@ -56,10 +68,10 @@ export const KPICard: React.FC<KPICardProps> = ({
       </div>
 
       {subtitle && (
-        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+        <p className="mt-1.5 text-xs text-[#17324D]/60 truncate font-mono">
           {subtitle}
         </p>
       )}
-    </div>
+    </SmoothCard>
   );
 };

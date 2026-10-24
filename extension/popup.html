@@ -2,167 +2,604 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StockPilot AI Companion</title>
   <style>
+    :root {
+      --bg-primary: #FFFFFF;
+      --bg-surface: #FFFFFF;
+      --bg-card: #FFFFFF;
+      --border-color: rgba(23, 50, 77, 0.15);
+      --border-focus: #0D9488;
+      --text-main: #17324D;
+      --text-muted: rgba(23, 50, 77, 0.65);
+      --text-dim: rgba(23, 50, 77, 0.45);
+      --accent-cyan: #0D9488;
+      --accent-blue: #0D9488;
+      --accent-green: #0D9488;
+      --accent-amber: #17324D;
+      --accent-red: #17324D;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      width: 380px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #090d16;
-      color: #e2e8f0;
+      width: 400px;
+      min-height: 520px;
+      max-height: 600px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-main);
       font-size: 13px;
+      line-height: 1.4;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
+
+    /* Header */
     header {
-      padding: 12px 16px;
-      background: #0f172a;
-      border-bottom: 1px solid #1e293b;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .logo-badge {
+    .brand-wrap {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-weight: 700;
-      font-size: 13px;
-      letter-spacing: 0.05em;
-      color: #38bdf8;
     }
     .pulse-dot {
       width: 8px;
       height: 8px;
-      background: #10b981;
+      background: var(--accent-green);
       border-radius: 50%;
-      box-shadow: 0 0 6px #10b981;
+      box-shadow: 0 0 8px rgba(13, 148, 136, 0.5);
+      animation: pulse 2s infinite;
     }
-    .container {
-      padding: 12px 16px;
+    .pulse-dot.offline {
+      background: var(--accent-red);
+      box-shadow: 0 0 8px rgba(23, 50, 77, 0.5);
     }
-    .search-box {
-      margin-bottom: 12px;
-      position: relative;
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.15); }
     }
-    .search-box input {
-      width: 100%;
-      padding: 8px 12px;
-      background: #141c2e;
-      border: 1px solid #27354f;
-      border-radius: 6px;
-      color: #f8fafc;
+    .brand-title {
+      font-weight: 800;
       font-size: 12px;
-      outline: none;
+      letter-spacing: 0.08em;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
     }
-    .search-box input:focus {
-      border-color: #38bdf8;
-    }
-    .stat-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .stat-card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      padding: 8px 10px;
-      border-radius: 6px;
-    }
-    .stat-card .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
-    .stat-card .value { font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 2px; }
-    .card-title {
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 3px 8px;
+      border-radius: 12px;
       font-size: 11px;
+    }
+    .role-badge {
+      font-size: 9px;
+      text-transform: uppercase;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #17324D;
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+    .logout-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 11px;
+      margin-left: 4px;
+    }
+    .logout-btn:hover { color: var(--accent-red); }
+
+    /* Offline / Error Alert Banner */
+    .banner {
+      padding: 8px 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .banner.error {
+      background: rgba(23, 50, 77, 0.08);
+      color: #17324D;
+      border-bottom: 1px solid rgba(23, 50, 77, 0.2);
+    }
+    .banner.warning {
+      background: rgba(23, 50, 77, 0.08);
+      color: #17324D;
+      border-bottom: 1px solid rgba(23, 50, 77, 0.2);
+    }
+    .banner-btn {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+    }
+
+    /* Views */
+    .view-container {
+      padding: 12px 14px;
+    }
+
+    /* Auth View */
+    .auth-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 18px 14px;
+      margin-top: 10px;
+    }
+    .auth-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+    .auth-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #94a3b8;
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
+      color: var(--text-muted);
+      margin-bottom: 4px;
     }
-    .stock-list, .alert-list {
-      max-height: 160px;
-      overflow-y: auto;
-      margin-bottom: 12px;
-      border: 1px solid #1e293b;
+    .form-control {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
       border-radius: 6px;
-      background: #0b1120;
+      color: var(--text-main);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
     }
-    .stock-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 6px 10px;
-      border-bottom: 1px solid #162033;
+    .form-control:focus {
+      border-color: var(--border-focus);
     }
-    .stock-item:last-child { border-bottom: none; }
-    .stock-sku { font-weight: 600; font-family: monospace; font-size: 11px; color: #38bdf8; }
-    .stock-qty { font-weight: 700; }
-    .stock-qty.low { color: #f87171; }
-    .alert-item {
-      padding: 6px 10px;
-      border-bottom: 1px solid #162033;
-      font-size: 11px;
-      color: #fca5a5;
-    }
-    .action-btn {
+    .btn-primary {
       width: 100%;
       padding: 9px;
-      background: #0284c7;
+      background: var(--accent-blue);
       color: #fff;
       border: none;
       border-radius: 6px;
       font-weight: 600;
       font-size: 12px;
       cursor: pointer;
+      transition: background 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
+      margin-top: 10px;
     }
-    .action-btn:hover { background: #0369a1; }
+    .btn-primary:hover { background: #0B7D73; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Persona Quick Buttons */
+    .persona-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .persona-btn {
+      padding: 6px 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 10px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .persona-btn:hover {
+      border-color: var(--accent-cyan);
+      color: var(--text-main);
+      background: rgba(13, 148, 136, 0.08);
+    }
+    .persona-btn strong {
+      display: block;
+      color: var(--text-main);
+      font-size: 11px;
+    }
+
+    /* Dashboard Layout */
+    .wh-select-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .wh-select {
+      flex: 1;
+      padding: 6px 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 11px;
+      outline: none;
+    }
+    .refresh-btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      color: var(--accent-cyan);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .refresh-btn:hover { background: rgba(23, 50, 77, 0.05); }
+
+    /* KPI Grid */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .kpi-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 7px 6px;
+      text-align: center;
+    }
+    .kpi-box .val {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .kpi-box .lbl {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .kpi-box.alert-box .val { color: var(--accent-red); }
+    .kpi-box.warning-box .val { color: var(--accent-amber); }
+    .kpi-box.green-box .val { color: var(--accent-green); }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 10px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px 4px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--accent-cyan);
+      border-bottom-color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    /* Content Lists */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .search-wrap {
+      margin-bottom: 10px;
+    }
+    .items-scroll {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: #0b1120;
+    }
+
+    .list-row {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(23, 50, 77, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .list-row:last-child { border-bottom: none; }
+    .item-sku {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+    .item-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-status-tag {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .tag-normal { background: #064e3b; color: #a7f3d0; }
+    .tag-low { background: rgba(23, 50, 77, 0.2); color: #17324D; }
+    .tag-stockout { background: rgba(23, 50, 77, 0.2); color: #fecaca; }
+
+    /* Alert Items */
+    .alert-card {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(23, 50, 77, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .alert-card:last-child { border-bottom: none; }
+    .alert-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .alert-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Transfer Cards */
+    .trf-card {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(23, 50, 77, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .trf-card:last-child { border-bottom: none; }
+    .btn-approve {
+      padding: 4px 8px;
+      background: #059669;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-approve:hover { background: #047857; }
+
+    /* Empty & Loading States */
+    .empty-state {
+      padding: 24px 12px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+    .empty-icon {
+      font-size: 20px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    /* Deep Link Footer */
+    .footer-actions {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 6px;
+    }
+    .btn-secondary {
+      flex: 1;
+      padding: 7px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: rgba(13, 148, 136, 0.08);
+      color: var(--text-main);
+      border-color: var(--border-focus);
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo-badge">
-      <div class="pulse-dot"></div>
-      STOCKPILOT AI
+    <div class="brand-wrap">
+      <div class="pulse-dot" id="pulseDot"></div>
+      <div class="brand-title">StockPilot AI</div>
     </div>
-    <div id="userBadge" style="font-size: 11px; color: #94a3b8;">Central Hub</div>
+    <div id="authHeader" style="display: none;">
+      <div class="user-pill">
+        <span id="userName">User</span>
+        <span class="role-badge" id="userRole">ROLE</span>
+        <button class="logout-btn" id="logoutBtn" title="Sign Out">✕</button>
+      </div>
+    </div>
   </header>
 
-  <div class="container">
-    <div class="search-box">
-      <input type="text" id="skuInput" placeholder="Quick SKU search (e.g. PRD-VAX-01)..." />
-    </div>
+  <div id="bannerContainer"></div>
 
-    <div class="stat-row">
-      <div class="stat-card">
-        <div class="label">Assigned Hub</div>
-        <div class="value" id="whName">Chicago Central</div>
+  <!-- 1. SIGN-IN VIEW -->
+  <div class="view-container" id="authView">
+    <div class="auth-card">
+      <div class="auth-title">Logistics Gateway Login</div>
+      <div class="auth-subtitle">Enter your enterprise credentials to connect to StockPilot AI</div>
+      
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="loginEmail" class="form-control" placeholder="user@stockpilot.ai" required />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn-primary" id="loginBtn">
+          Sign In to Companion
+        </button>
+      </form>
+
+      <div style="margin-top: 14px; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; text-align: center;">
+        Quick Role Profiles
       </div>
-      <div class="stat-card">
-        <div class="label">Active Alerts</div>
-        <div class="value" id="alertCount" style="color: #fca5a5;">0 Active</div>
+      <div class="persona-grid">
+        <button class="persona-btn" data-email="warehouse.manager@stockpilot.ai" data-pwd="Admin123!">
+          <strong>Wh Manager</strong>
+          wh_manager@stockpilot
+        </button>
+        <button class="persona-btn" data-email="supplychain@stockpilot.ai" data-pwd="Admin123!">
+          <strong>Supply Chain</strong>
+          supplychain@stockpilot
+        </button>
+        <button class="persona-btn" data-email="operator@stockpilot.ai" data-pwd="Admin123!">
+          <strong>Operator</strong>
+          operator@stockpilot
+        </button>
+        <button class="persona-btn" data-email="superadmin@stockpilot.ai" data-pwd="Admin123!">
+          <strong>Super Admin</strong>
+          superadmin@stockpilot
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. AUTHENTICATED DASHBOARD VIEW -->
+  <div class="view-container" id="dashView" style="display: none;">
+    <!-- Warehouse Select & Refresh -->
+    <div class="wh-select-row">
+      <select id="warehouseSelect" class="wh-select">
+        <option value="wh_chicago_01">Central Hub Chicago</option>
+      </select>
+      <button class="refresh-btn" id="refreshBtn">
+        ↻ Refresh
+      </button>
+    </div>
+
+    <!-- Live KPI Metrics -->
+    <div class="kpi-row">
+      <div class="kpi-box green-box">
+        <div class="val" id="kpiItems">0</div>
+        <div class="lbl">Items</div>
+      </div>
+      <div class="kpi-box warning-box">
+        <div class="val" id="kpiLow">0</div>
+        <div class="lbl">Low Stock</div>
+      </div>
+      <div class="kpi-box alert-box">
+        <div class="val" id="kpiAlerts">0</div>
+        <div class="lbl">Excursions</div>
+      </div>
+      <div class="kpi-box warning-box">
+        <div class="val" id="kpiExpiry">0</div>
+        <div class="lbl">Near Expiry</div>
       </div>
     </div>
 
-    <div class="card-title">
-      <span>Warehouse Inventory</span>
-      <span style="color: #38bdf8; cursor: pointer;" id="refreshBtn">↻ Refresh</span>
-    </div>
-    <div class="stock-list" id="stockList">
-      <div style="padding: 12px; text-align: center; color: #64748b;">Loading stock records...</div>
-    </div>
-
-    <div class="card-title">Active Cold-Chain Alerts</div>
-    <div class="alert-list" id="alertList">
-      <div style="padding: 10px; text-align: center; color: #10b981; font-size: 11px;">✓ All storage temperatures nominal</div>
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="tabStock">Stock</button>
+      <button class="tab-btn" data-tab="tabAlerts">Alerts</button>
+      <button class="tab-btn" data-tab="tabOptimizer">Optimizer</button>
     </div>
 
-    <button class="action-btn" id="openConsoleBtn">
-      Open StockPilot Enterprise Console ↗
-    </button>
+    <!-- Tab 1: Stock Inventory -->
+    <div class="tab-content active" id="tabStock">
+      <div class="search-wrap">
+        <input type="text" id="skuSearch" class="form-control" placeholder="Search SKU, name, or handling..." />
+      </div>
+      <div class="items-scroll" id="stockListContainer">
+        <div class="empty-state">Loading stock records...</div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Alerts & Expiry -->
+    <div class="tab-content" id="tabAlerts">
+      <div style="font-size: 10px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;">
+        Cold-Chain IoT Excursions
+      </div>
+      <div class="items-scroll" id="iotAlertsContainer" style="max-height: 100px; margin-bottom: 10px;">
+        <div class="empty-state">No active telemetry excursions</div>
+      </div>
+
+      <div style="font-size: 10px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;">
+        FEFO Expiry Warnings (Next 60 Days)
+      </div>
+      <div class="items-scroll" id="expiryAlertsContainer" style="max-height: 100px;">
+        <div class="empty-state">No batches approaching expiry</div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Optimizer & Distribution -->
+    <div class="tab-content" id="tabOptimizer">
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-weight: 700; color: var(--accent-cyan); font-size: 11px;">OR-Tools MILP Solver</span>
+          <span style="color: var(--accent-green); font-weight: 700; font-size: 11px;" id="optSavings">16.4% Cost Reduction</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted);" id="optModel">
+          Constrained distribution model active with FEFO expiry penalty
+        </div>
+      </div>
+
+      <div style="font-size: 10px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;">
+        Pending Transfers Requiring Approval
+      </div>
+      <div class="items-scroll" id="transfersContainer" style="max-height: 110px;">
+        <div class="empty-state">No pending transfers awaiting review</div>
+      </div>
+    </div>
+
+    <!-- Quick Navigation / Deep Links -->
+    <div class="footer-actions">
+      <button class="btn-secondary" id="deepInventory">Inventory ↗</button>
+      <button class="btn-secondary" id="deepTransfers">Transfers ↗</button>
+      <button class="btn-secondary" id="deepOptimizer">Optimizer ↗</button>
+      <button class="btn-secondary" id="deepConsole" style="color: var(--accent-cyan); border-color: #0284c7;">Console ↗</button>
+    </div>
   </div>
 
   <script src="popup.js"></script>

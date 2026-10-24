@@ -164,60 +164,61 @@ export const ForecastingPage: React.FC = () => {
               Left region displays actual consumed hospital units; right region projects ML predictions with statistical uncertainty bounds.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-slate-400">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> Actual
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 ml-2" /> ML Forecast
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 ml-2" /> Moving Avg
+          <div className="flex items-center gap-2 text-[10px] text-[#17324D]/60 font-mono">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#17324D]" /> Actual
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0D9488] ml-2" /> ML Forecast
+            <span className="w-2.5 h-2.5 rounded-full border border-[#17324D] ml-2" /> Moving Avg
           </div>
         </div>
 
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
-              <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} />
-              <YAxis stroke="#94a3b8" fontSize={10} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#17324D" opacity={0.1} />
+              <XAxis dataKey="date" stroke="#17324D" fontSize={10} opacity={0.6} />
+              <YAxis stroke="#17324D" fontSize={10} opacity={0.6} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#090d16',
-                  borderColor: '#1e293b',
+                  backgroundColor: '#FFFFFF',
+                  borderColor: 'rgba(23, 50, 77, 0.15)',
                   borderRadius: '8px',
                   fontSize: '12px',
-                  color: '#f8fafc',
+                  color: '#17324D',
                 }}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-              {/* Actuals Line */}
+              {/* Actuals Line (Navy) */}
               <Line
                 type="monotone"
                 dataKey="Historical Actual"
-                stroke="#10b981"
+                stroke="#17324D"
                 strokeWidth={2.5}
-                dot={{ r: 3, fill: '#10b981' }}
+                dot={{ r: 3, fill: '#17324D' }}
               />
-              {/* Moving Average Line */}
+              {/* Moving Average Line (Navy Dashed) */}
               <Line
                 type="monotone"
                 dataKey="7-Day Moving Avg"
-                stroke="#94a3b8"
+                stroke="#17324D"
                 strokeWidth={1.5}
-                strokeDasharray="3 3"
+                strokeDasharray="4 4"
+                opacity={0.6}
                 dot={false}
               />
-              {/* ML Regression Forecast Line */}
+              {/* ML Regression Forecast Line (Teal) */}
               <Line
                 type="monotone"
                 dataKey="ML Ridge Forecast"
-                stroke="#38bdf8"
+                stroke="#0D9488"
                 strokeWidth={2.5}
-                dot={{ r: 3, fill: '#38bdf8' }}
+                dot={{ r: 3, fill: '#0D9488' }}
               />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-          <Info className="w-4 h-4 text-sky-400 shrink-0" />
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-white border border-[#17324D]/15 text-xs text-[#17324D]/70">
+          <Info className="w-4 h-4 text-[#0D9488] shrink-0" />
           <span>
             <strong>Data Disclosure:</strong> Historical series comprises 90 daily observations calibrated for pharmaceutical seasonalities. Evaluation metrics are strictly measured on an unseen 14-day holdout validation split.
           </span>

@@ -2,7 +2,49 @@ import { useAppStore } from '../store/useAppStore';
 
 const API_BASE = '/api/v1';
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAuthToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  
+  refreshPromise = (async () => {
+    try {
+      const activeRole = useAppStore.getState().activeRole || 'supply_chain_manager';
+      // 1. Attempt role persona switch
+      const res = await fetch(`${API_BASE}/auth/demo/switch-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: activeRole }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        useAppStore.getState().setUser(data.user, data.access_token);
+        return data.access_token;
+      }
+      
+      // 2. Direct login fallback
+      const loginRes = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'supplychain@stockpilot.ai', password: 'Admin123!' }),
+      });
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        useAppStore.getState().setUser(data.user, data.access_token);
+        return data.access_token;
+      }
+    } catch (e) {
+      console.warn('Auto-auth refresh failed:', e);
+    } finally {
+      refreshPromise = null;
+    }
+    return null;
+  })();
+  
+  return refreshPromise;
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const token = useAppStore.getState().token;
   const headers = new Headers(options.headers || {});
   
@@ -18,6 +60,14 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options,
     headers,
   });
+
+  // Handle 401 Unauthorized with automatic session acquisition & transparent retry
+  if (response.status === 401 && !isRetry && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/demo/switch-role')) {
+    const newToken = await refreshAuthToken();
+    if (newToken) {
+      return request<T>(endpoint, options, true);
+    }
+  }
 
   if (!response.ok) {
     let errorDetail = 'Network request failed';
@@ -40,6 +90,8 @@ export const api = {
     getMe: () => request<any>('/auth/me'),
     inviteUser: (body: any) => request<any>('/auth/invite', { method: 'POST', body: JSON.stringify(body) }),
     listUsers: () => request<any[]>('/auth/users'),
+    updateUser: (userId: string, body: any) => request<any>(`/auth/users/${userId}`, { method: 'PUT', body: JSON.stringify(body) }),
+    toggleUserActive: (userId: string) => request<any>(`/auth/users/${userId}/toggle-active`, { method: 'POST' }),
     switchRole: (role: string) => request<any>('/auth/demo/switch-role', { method: 'POST', body: JSON.stringify({ role }) }),
   },
 
@@ -77,6 +129,8 @@ export const api = {
     dispatchStock: (body: any) => request<any>('/inventory/dispatch', { method: 'POST', body: JSON.stringify(body) }),
     adjustStock: (body: any) => request<any>('/inventory/adjust', { method: 'POST', body: JSON.stringify(body) }),
     reportDamage: (body: any) => request<any>('/inventory/damage', { method: 'POST', body: JSON.stringify(body) }),
+    cycleCount: (body: any) => request<any>('/inventory/cycle-count', { method: 'POST', body: JSON.stringify(body) }),
+    resolveDiscrepancy: (body: any) => request<any>('/inventory/discrepancy/resolve', { method: 'POST', body: JSON.stringify(body) }),
   },
 
   // Transfers
@@ -84,6 +138,7 @@ export const api = {
     list: () => request<any[]>('/transfers'),
     create: (body: any) => request<any>('/transfers', { method: 'POST', body: JSON.stringify(body) }),
     approveOrReject: (body: any) => request<any>('/transfers/approve', { method: 'POST', body: JSON.stringify(body) }),
+    receive: (body: any) => request<any>('/transfers/receive', { method: 'POST', body: JSON.stringify(body) }),
   },
 
   // Google OR-Tools Optimizer
@@ -113,6 +168,8 @@ export const api = {
     simulateChat: (message_text: string, from_number?: string) => 
       request<any>('/whatsapp/simulator/chat', { method: 'POST', body: JSON.stringify({ message_text, from_number }) }),
     getLogs: () => request<any[]>('/whatsapp/logs'),
+    getBridgeStatus: () => request<any>('/whatsapp/bridge/status'),
+    pairBridge: (phone: string) => request<any>('/whatsapp/bridge/pair', { method: 'POST', body: JSON.stringify({ phone }) }),
   },
 
   // Audit Logs

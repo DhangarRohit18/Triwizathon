@@ -13,6 +13,8 @@ class RoleEnum(str, Enum):
     WAREHOUSE_MANAGER = "warehouse_manager"
     DISTRIBUTOR = "distributor"
     OPERATOR = "operator"
+    WAREHOUSE_OPERATOR = "warehouse_operator"
+    DISTRIBUTOR_FIELD_OPERATOR = "distributor_field_operator"
 
 class UserBase(BaseModel):
     email: str
@@ -20,6 +22,8 @@ class UserBase(BaseModel):
     role: RoleEnum
     org_id: str
     warehouse_id: Optional[str] = None
+    warehouse_ids: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
     phone_number: Optional[str] = None
     is_active: bool = True
 
@@ -31,7 +35,17 @@ class UserInvite(BaseModel):
     full_name: str
     role: RoleEnum
     warehouse_id: Optional[str] = None
+    warehouse_ids: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
     temporary_password: Optional[str] = "StockPilot2026!"
+
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[RoleEnum] = None
+    warehouse_id: Optional[str] = None
+    warehouse_ids: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
+    is_active: Optional[bool] = None
 
 class UserLogin(BaseModel):
     email: str
@@ -97,13 +111,13 @@ class Product(BaseModel):
     category: str
     description: Optional[str] = ""
     unit: str = "units"  # "units", "vials", "boxes", "pallets"
-    unit_cost: float
-    selling_price: float
+    unit_cost: float = 0.0
+    selling_price: float = 0.0
     handling: HandlingRequirement = HandlingRequirement.AMBIENT
     min_safety_stock: int = 50
     reorder_point: int = 100
-    barcode: str
-    qr_code_payload: str
+    barcode: str = ""
+    qr_code_payload: str = ""
     shelf_life_days: int = 365
     weight_kg: float = 0.5
     created_at: Optional[str] = None
@@ -145,11 +159,19 @@ class InventoryItem(BaseModel):
 class MovementType(str, Enum):
     RECEIPT = "receipt"
     DISPATCH = "dispatch"
+    TRANSFER_REQUEST = "transfer_request"
     TRANSFER_OUT = "transfer_out"
     TRANSFER_IN = "transfer_in"
+    TRANSFER_DISPATCH = "transfer_dispatch"
+    TRANSFER_RECEIVE = "transfer_receive"
+    TRANSFER_CANCEL = "transfer_cancel"
+    RESERVATION = "reservation"
+    RELEASE_RESERVATION = "release_reservation"
     ADJUSTMENT = "adjustment"
     CYCLE_COUNT = "cycle_count"
     DAMAGE_REPORT = "damage_report"
+    DISCREPANCY_RESOLUTION = "discrepancy_resolution"
+    QUARANTINE = "quarantine"
 
 class InventoryMovement(BaseModel):
     id: str
@@ -161,11 +183,14 @@ class InventoryMovement(BaseModel):
     destination_id: Optional[str] = None
     movement_type: MovementType
     quantity_changed: int
+    unit: str = "units"
     balance_after: int
     actor_id: str
     actor_name: str
+    actor_role: str = "operator"
     reason: str
     timestamp: str
+    resulting_status: str = "COMMITTED"
 
 # -------------------------------------------------------------
 # Stock Mutation Requests
@@ -192,6 +217,24 @@ class DispatchStockRequest(BaseModel):
     quantity: int
     reason: str = "Sales order fulfillment"
 
+class StockReservationRequest(BaseModel):
+    correlation_id: str
+    warehouse_id: str
+    product_id: str
+    batch_id: Optional[str] = None
+    quantity: int
+    order_id: Optional[str] = None
+    reason: str = "Order allocation hold"
+
+class ReleaseReservationRequest(BaseModel):
+    correlation_id: str
+    warehouse_id: str
+    product_id: str
+    batch_id: Optional[str] = None
+    quantity: int
+    order_id: Optional[str] = None
+    reason: str = "Order cancellation or timeout"
+
 class StockAdjustmentRequest(BaseModel):
     correlation_id: str
     warehouse_id: str
@@ -207,16 +250,50 @@ class DamageReportRequest(BaseModel):
     batch_id: str
     damaged_quantity: int
     reason: str
+    photo_url: Optional[str] = None
+
+class CycleCountRequest(BaseModel):
+    correlation_id: str
+    warehouse_id: str
+    product_id: str
+    batch_id: str
+    counted_quantity: int
+    storage_bin: Optional[str] = None
+    notes: Optional[str] = None
+
+class DiscrepancyResolutionRequest(BaseModel):
+    correlation_id: str
+    warehouse_id: str
+    product_id: str
+    batch_id: str
+    discrepancy_type: str = "missing"  # "damaged", "missing", "found", "expired", "mislabeled"
+    quantity_delta: int
+    resolution_action: str = "write_off"  # "write_off", "quarantine", "restock", "relabel"
+    reason: str
 
 # -------------------------------------------------------------
-# Inter-Warehouse Transfer Models
+# Inter-Warehouse Transfer Models & State Machine
 # -------------------------------------------------------------
 class TransferStatus(str, Enum):
-    PENDING = "pending"
+    REQUESTED = "requested"
+    PENDING = "pending"  # Backward compatibility alias
     APPROVED = "approved"
+    DISPATCHED = "dispatched"
     IN_TRANSIT = "in_transit"
     RECEIVED = "received"
     REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+ALLOWED_TRANSFER_TRANSITIONS = {
+    TransferStatus.REQUESTED: [TransferStatus.APPROVED, TransferStatus.REJECTED, TransferStatus.CANCELLED],
+    TransferStatus.PENDING: [TransferStatus.APPROVED, TransferStatus.REJECTED, TransferStatus.CANCELLED],
+    TransferStatus.APPROVED: [TransferStatus.DISPATCHED, TransferStatus.IN_TRANSIT, TransferStatus.CANCELLED],
+    TransferStatus.DISPATCHED: [TransferStatus.IN_TRANSIT, TransferStatus.RECEIVED],
+    TransferStatus.IN_TRANSIT: [TransferStatus.RECEIVED],
+    TransferStatus.RECEIVED: [],   # Terminal
+    TransferStatus.REJECTED: [],   # Terminal
+    TransferStatus.CANCELLED: [],  # Terminal
+}
 
 class TransferItem(BaseModel):
     product_id: str
@@ -231,11 +308,15 @@ class InterWarehouseTransfer(BaseModel):
     source_warehouse_id: str
     target_warehouse_id: str
     items: List[TransferItem]
-    status: TransferStatus = TransferStatus.PENDING
+    status: TransferStatus = TransferStatus.REQUESTED
     requested_by_id: str
     requested_by_name: str
     approved_by_id: Optional[str] = None
     approved_by_name: Optional[str] = None
+    carrier_name: Optional[str] = None
+    tracking_number: Optional[str] = None
+    shipped_at: Optional[str] = None
+    received_at: Optional[str] = None
     estimated_transport_cost: float = 0.0
     notes: Optional[str] = ""
     created_at: str
@@ -245,6 +326,22 @@ class TransferApprovalRequest(BaseModel):
     transfer_id: str
     approved: bool
     notes: Optional[str] = ""
+
+class TransferDispatchRequest(BaseModel):
+    transfer_id: str
+    carrier_name: Optional[str] = None
+    tracking_number: Optional[str] = None
+    notes: Optional[str] = ""
+
+class TransferReceiveRequest(BaseModel):
+    transfer_id: str
+    damaged_quantity: int = 0
+    condition: str = "intact"  # "intact", "excursion", "damaged"
+    notes: Optional[str] = ""
+
+class TransferCancelRequest(BaseModel):
+    transfer_id: str
+    reason: str = "Cancelled by authorized manager"
 
 # -------------------------------------------------------------
 # Optimization & Scenario Models
@@ -275,12 +372,21 @@ class AllocationRecommendation(BaseModel):
     destination_name: str
     allocated_quantity: int
     requested_demand: int
+    unmet_demand: int = 0
     unit_transport_cost: float
     total_transport_cost: float
     estimated_delivery_hours: float
-    expiry_risk_score: float  # 0.0 to 1.0
-    stockout_risk_after: float
+    expiry_risk_score: float = 0.0  # 0.0 to 1.0
+    stockout_risk_after: float = 0.0
+    has_expiry_risk: bool = False
+    has_stockout_risk: bool = False
+    constraint_status: str = "OPTIMAL"  # OPTIMAL, FEASIBLE, CAPACITY_CONSTRAINED, INFEASIBLE
     rationale: str
+    baseline_allocated_quantity: Optional[int] = None
+    baseline_transport_cost: Optional[float] = None
+    baseline_savings_amount: Optional[float] = None
+    model_version: str = "ortools-scip-v2.1"
+    data_version: str = "seed-triwiz-2026"
     alternative_options: List[Dict[str, Any]] = []
 
 class OptimizationSummary(BaseModel):
@@ -296,6 +402,7 @@ class OptimizationSummary(BaseModel):
     execution_time_ms: float
     solver_status: str
     solver_name: str  # "OR-Tools SCIP MIP" or "Greedy Baseline Heuristic"
+    hard_constraints_enforced: bool = True
 
 class OptimizationResult(BaseModel):
     run_id: str
@@ -306,6 +413,10 @@ class OptimizationResult(BaseModel):
     recommendations: List[AllocationRecommendation]
     savings_amount: float
     savings_percent: float
+    model_version: str = "ortools-scip-v2.1"
+    data_version: str = "seed-triwiz-2026"
+    hard_constraints_satisfied: bool = True
+    diagnostic_messages: List[str] = []
 
 # -------------------------------------------------------------
 # Demand Forecasting Models
@@ -323,8 +434,12 @@ class ForecastEvaluation(BaseModel):
     mae: float
     rmse: float
     r2_score: float
+    mape_percent: Optional[float] = None
+    baseline_ma_mae: Optional[float] = None
+    baseline_ma_rmse: Optional[float] = None
     horizon_days: int
     holdout_sample_size: int
+    data_provenance: str = "calibrated_synthetic_historical_series"
 
 class ProductForecastResult(BaseModel):
     product_id: str
@@ -332,21 +447,28 @@ class ProductForecastResult(BaseModel):
     sku: str
     evaluation: ForecastEvaluation
     timeline: List[ForecastDataPoint]
+    model_version: str = "scikit-ridge-v1.2"
+    data_version: str = "seed-triwiz-2026"
 
 # -------------------------------------------------------------
 # IoT Telemetry Models
 # -------------------------------------------------------------
 class SensorReading(BaseModel):
+    id: Optional[str] = None
     device_id: str
     org_id: str
     warehouse_id: str
     storage_zone: str
     timestamp: str
+    server_received_at: Optional[str] = None
     temperature_c: float
     humidity_percent: float
-    battery_level_percent: float
+    battery_level_percent: float = 100.0
+    rssi_dbm: Optional[int] = -65
     door_open: bool = False
     is_valid: bool = True
+    is_simulated: bool = False
+    data_source: str = "ESP32_SECURE_HARDWARE"
 
 class IoTDevice(BaseModel):
     device_id: str
@@ -356,19 +478,58 @@ class IoTDevice(BaseModel):
     device_name: str
     mac_address: str
     ip_address: Optional[str] = "192.168.1.101"
-    last_ping: str
-    is_online: bool
-    firmware_version: str = "v2.4.1-esp32"
+    last_ping: Optional[str] = None
+    is_online: bool = False
+    firmware_version: str = "v2.5.0-esp32-secure"
     temp_min_threshold: float = 2.0
     temp_max_threshold: float = 8.0
     humidity_max_threshold: float = 65.0
+    ping_interval_seconds: int = 60
+    device_api_key: Optional[str] = None
+    health_status: str = "HEALTHY"
+
+class IoTDeviceRegistrationRequest(BaseModel):
+    device_id: str
+    device_name: str
+    warehouse_id: str
+    storage_zone: str
+    mac_address: str
+    firmware_version: Optional[str] = "v2.5.0-esp32-secure"
+    temp_min_threshold: float = 2.0
+    temp_max_threshold: float = 8.0
+    humidity_max_threshold: float = 65.0
+    ping_interval_seconds: int = 60
+    device_api_key: Optional[str] = None
+
+class IoTDeviceConfigUpdateRequest(BaseModel):
+    device_name: Optional[str] = None
+    storage_zone: Optional[str] = None
+    temp_min_threshold: Optional[float] = None
+    temp_max_threshold: Optional[float] = None
+    humidity_max_threshold: Optional[float] = None
+    ping_interval_seconds: Optional[int] = None
+
+class TelemetryPayload(BaseModel):
+    device_id: str
+    temperature_c: Optional[float] = None
+    temperature: Optional[float] = None
+    temperature_unit: str = "C"  # "C", "F"
+    humidity_percent: float
+    timestamp: Optional[Any] = None
+    battery_level_percent: Optional[float] = 98.0
+    rssi_dbm: Optional[int] = -65
+    door_open: Optional[bool] = False
+    boot_count: Optional[int] = 1
+    data_source: Optional[str] = "ESP32_SECURE_HARDWARE"
+    supplied_org_id: Optional[str] = None
+    supplied_warehouse_id: Optional[str] = None
 
 class IoTAlert(BaseModel):
     id: str
     org_id: str
     warehouse_id: str
     device_id: str
-    alert_type: str  # "temp_excursion", "humidity_breach", "device_offline", "door_ajar"
+    alert_type: str  # "temp_excursion", "humidity_breach", "device_offline", "door_ajar", "low_battery"
     severity: str    # "critical", "warning", "info"
     message: str
     reading_value: float
@@ -376,6 +537,20 @@ class IoTAlert(BaseModel):
     timestamp: str
     acknowledged: bool = False
     acknowledged_by: Optional[str] = None
+    acknowledged_at: Optional[str] = None
+
+class IoTReadingAggregate(BaseModel):
+    id: str
+    device_id: str
+    warehouse_id: str
+    org_id: str
+    hour_bucket: str
+    readings_count: int
+    min_temp: float
+    max_temp: float
+    avg_temp: float
+    avg_humidity: float
+    excursion_count: int
 
 # -------------------------------------------------------------
 # WhatsApp Bot Models
@@ -390,7 +565,21 @@ class WhatsAppResponse(BaseModel):
     reply_text: str
     action_taken: Optional[str] = None
     correlation_id: Optional[str] = None
-    status: str = "sent"
+    status: str = "delivered"
+    is_simulated: bool = False
+
+class WhatsAppConsentUpdate(BaseModel):
+    phone_number: str
+    opted_in: bool
+
+class WhatsAppOutboundAlertRequest(BaseModel):
+    alert_type: str  # "excursion", "stockout", "transfer_approval"
+    target_phone: Optional[str] = None
+    target_role: Optional[str] = "warehouse_manager"
+    warehouse_id: Optional[str] = None
+    product_id: Optional[str] = None
+    transfer_id: Optional[str] = None
+    message: Optional[str] = None
 
 # -------------------------------------------------------------
 # Audit Log Models

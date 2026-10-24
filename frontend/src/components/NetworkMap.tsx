@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Warehouse, Destination } from '../types';
-import { ShieldAlert, CheckCircle2, AlertOctagon, Navigation } from 'lucide-react';
+import { ShieldAlert, Navigation, Layers } from 'lucide-react';
+import { RetroBadge } from './ui/RetroBadge';
 
 interface NetworkMapProps {
   warehouses: Warehouse[];
@@ -35,44 +36,23 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
   const selectedWh = warehouses.find(w => w.id === selectedWhId);
 
   return (
-    <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 overflow-hidden shadow-inner">
+    <div className="relative rounded-2xl border border-[#17324D]/15 bg-white overflow-hidden shadow-xs">
       {/* Map Control Header */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3 bg-slate-950/80 backdrop-blur-md px-3.5 py-2 rounded-xl border border-slate-800">
-        <Navigation className="w-4 h-4 text-sky-400" />
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3 bg-white px-3.5 py-2 rounded-xl border border-[#17324D]/15 shadow-xs">
+        <Navigation className="w-4 h-4 text-[#0D9488]" />
         <div>
-          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+          <h4 className="text-xs font-mono font-bold text-[#17324D] uppercase tracking-wider">
             Multi-Warehouse Distribution Network
           </h4>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-[10px] text-[#17324D]/60 font-mono">
             {warehouses.length} Active Logistics Hubs ➔ {destinations.length} Regional Destination Centers
           </p>
         </div>
       </div>
 
-      {/* SVG Canvas Map */}
-      <svg className="w-full h-[460px] bg-slate-950" viewBox="0 0 800 460">
-        <defs>
-          <radialGradient id="gridGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#0284c7" stopOpacity="0.08" />
-            <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id="routeLine" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.2" />
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Ambient background grid circle */}
-        <circle cx="400" cy="230" r="300" fill="url(#gridGlow)" />
-
-        {/* Dynamic Allocation Routing Lines */}
+      {/* SVG Canvas Map strictly in White, Deep Navy, and Teal */}
+      <svg className="w-full h-[460px] bg-white" viewBox="0 0 800 460">
+        {/* Dynamic Allocation Routing Lines in Teal */}
         {activeAllocations.map((alloc, idx) => {
           const srcWh = warehouses.find(w => w.id === alloc.source_warehouse_id);
           const dst = destinations.find(d => d.id === alloc.destination_id);
@@ -81,7 +61,6 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
           const p1 = project(srcWh.lat, srcWh.lng);
           const p2 = project(dst.lat, dst.lng);
 
-          // Quadratic bezier curve midpoint
           const midX = (p1.x + p2.x) / 2;
           const midY = (p1.y + p2.y) / 2 - 25;
 
@@ -90,12 +69,11 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
               <path
                 d={`M ${p1.x} ${p1.y} Q ${midX} ${midY} ${p2.x} ${p2.y}`}
                 fill="none"
-                stroke="url(#routeLine)"
+                stroke="#0D9488"
                 strokeWidth="1.8"
                 strokeDasharray="4 4"
-                className="animate-pulse"
               />
-              <circle cx={(p1.x + p2.x) / 2} cy={midY + 12} r="2" fill="#38bdf8" />
+              <circle cx={(p1.x + p2.x) / 2} cy={midY + 12} r="2.5" fill="#0D9488" />
             </g>
           );
         })}
@@ -112,7 +90,8 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
                 y1={p1.y}
                 x2={p2.x}
                 y2={p2.y}
-                stroke="#1e293b"
+                stroke="#17324D"
+                strokeOpacity="0.1"
                 strokeWidth="0.8"
                 strokeDasharray="2 2"
               />
@@ -125,16 +104,17 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
           const { x, y } = project(dst.lat, dst.lng);
           return (
             <g key={dst.id} className="cursor-pointer group">
-              <circle cx={x} cy={y} r="4" fill="#0f172a" stroke="#64748b" strokeWidth="1.5" />
-              <circle cx={x} cy={y} r="2" fill="#94a3b8" />
+              <circle cx={x} cy={y} r="4" fill="#FFFFFF" stroke="#17324D" strokeWidth="1.5" />
+              <circle cx={x} cy={y} r="2" fill="#0D9488" />
               <text
                 x={x}
                 y={y + 13}
                 textAnchor="middle"
                 fontSize="9"
-                fill="#94a3b8"
+                fill="#17324D"
+                opacity="0.75"
                 fontWeight="600"
-                className="select-none group-hover:fill-sky-400 transition-colors"
+                className="select-none font-mono"
               >
                 {dst.name.split(' ')[0]}
               </text>
@@ -154,24 +134,23 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
               onClick={() => setSelectedWhId(wh.id === selectedWhId ? null : wh.id)}
               className="cursor-pointer"
             >
-              {/* Outer Pulse ring if disrupted or active */}
+              {/* Outer Pulse ring if selected or disrupted */}
               {isDown ? (
-                <circle cx={x} cy={y} r="18" fill="none" stroke="#ef4444" strokeWidth="1.5" className="animate-ping opacity-75" />
-              ) : (
-                <circle cx={x} cy={y} r={isSelected ? 16 : 12} fill="none" stroke="#0ea5e9" strokeWidth="1" opacity="0.4" />
-              )}
+                <circle cx={x} cy={y} r="18" fill="none" stroke="#17324D" strokeWidth="1" strokeDasharray="3 3" opacity="0.4" />
+              ) : isSelected ? (
+                <circle cx={x} cy={y} r="16" fill="none" stroke="#0D9488" strokeWidth="1.5" opacity="0.8" />
+              ) : null}
 
               {/* Main Hub Node */}
               <circle
                 cx={x}
                 cy={y}
                 r="9"
-                fill={isDown ? "#7f1d1d" : "#0369a1"}
-                stroke={isDown ? "#ef4444" : "#38bdf8"}
+                fill={isDown ? "#FFFFFF" : "#17324D"}
+                stroke={isDown ? "#17324D" : "#0D9488"}
                 strokeWidth="2.5"
-                filter="url(#glow)"
               />
-              <circle cx={x} cy={y} r="3.5" fill="#ffffff" />
+              <circle cx={x} cy={y} r="3.5" fill={isDown ? "#17324D" : "#0D9488"} />
 
               {/* Warehouse Code & Name */}
               <text
@@ -179,9 +158,9 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
                 y={y - 14}
                 textAnchor="middle"
                 fontSize="11"
-                fill={isDown ? "#f87171" : "#e2e8f0"}
+                fill="#17324D"
                 fontWeight="bold"
-                className="select-none"
+                className="select-none font-mono"
               >
                 {wh.code}
               </text>
@@ -190,9 +169,10 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
                 y={y + 22}
                 textAnchor="middle"
                 fontSize="10"
-                fill="#64748b"
+                fill="#17324D"
+                opacity="0.65"
                 fontWeight="500"
-                className="select-none"
+                className="select-none font-mono"
               >
                 {wh.city}
               </text>
@@ -203,19 +183,19 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
 
       {/* Selected Warehouse Inspection Card */}
       {selectedWh && (
-        <div className="absolute bottom-4 left-4 right-4 z-20 bg-slate-950/95 border border-slate-800 rounded-xl p-4 shadow-2xl backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-2">
+        <div className="absolute bottom-4 left-4 right-4 z-20 bg-white border border-[#17324D]/15 rounded-xl p-4 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${selectedWh.is_operational ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-              {selectedWh.is_operational ? <CheckCircle2 className="w-5 h-5" /> : <AlertOctagon className="w-5 h-5" />}
+            <div className="p-2.5 rounded-xl bg-[#17324D]/5 text-[#17324D] border border-[#17324D]/15">
+              <Layers className="w-5 h-5 text-[#0D9488]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-white">{selectedWh.name}</h4>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${selectedWh.is_operational ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                  {selectedWh.is_operational ? 'OPERATIONAL' : 'DISRUPTED / DOWN'}
-                </span>
+                <h4 className="text-sm font-bold text-[#17324D]">{selectedWh.name}</h4>
+                <RetroBadge variant={selectedWh.is_operational ? 'teal' : 'navy'} size="sm">
+                  {selectedWh.is_operational ? 'OPERATIONAL' : 'DISRUPTED'}
+                </RetroBadge>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#17324D]/60 font-mono mt-0.5">
                 {selectedWh.address}, {selectedWh.city}, {selectedWh.state} • Lat: {selectedWh.lat.toFixed(2)}, Lng: {selectedWh.lng.toFixed(2)}
               </p>
             </div>
@@ -223,23 +203,19 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
 
           <div className="flex items-center gap-6 text-xs">
             <div>
-              <span className="text-slate-500 uppercase tracking-wider block text-[10px]">Pallet Capacity</span>
-              <span className="font-bold text-white font-mono-num">{selectedWh.used_pallets.toLocaleString()} / {selectedWh.capacity_pallets.toLocaleString()}</span>
+              <span className="text-[#17324D]/50 uppercase tracking-wider block text-[10px] font-mono">Pallet Capacity</span>
+              <span className="font-bold text-[#17324D] font-mono-num">{selectedWh.used_pallets.toLocaleString()} / {selectedWh.capacity_pallets.toLocaleString()}</span>
             </div>
             <div>
-              <span className="text-slate-500 uppercase tracking-wider block text-[10px]">Cold Storage</span>
-              <span className="font-bold text-sky-400 font-mono-num">{selectedWh.cold_storage_capacity.toLocaleString()} pallets</span>
+              <span className="text-[#17324D]/50 uppercase tracking-wider block text-[10px] font-mono">Cold Storage</span>
+              <span className="font-bold text-[#0D9488] font-mono-num">{selectedWh.cold_storage_capacity.toLocaleString()} pallets</span>
             </div>
             {onToggleDisruption && (
               <button
                 onClick={() => onToggleDisruption(selectedWh.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                  selectedWh.is_operational
-                    ? 'bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30'
-                    : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
-                }`}
+                className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all flex items-center gap-1.5 border border-[#17324D]/20 bg-white text-[#17324D] hover:bg-[#17324D]/5 cursor-pointer"
               >
-                <ShieldAlert className="w-3.5 h-3.5" />
+                <ShieldAlert className="w-3.5 h-3.5 text-[#0D9488]" />
                 {selectedWh.is_operational ? 'Simulate Disruption' : 'Restore Operations'}
               </button>
             )}

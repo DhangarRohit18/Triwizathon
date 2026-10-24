@@ -51,6 +51,20 @@ def init_seed_data():
             "created_at": now_iso,
         },
         {
+            "id": "usr_organizer_vk",
+            "email": "organizer@stockpilot.ai",
+            "full_name": "Organizer (Vk)",
+            "role": ROLE_ORG_ADMIN,
+            "org_id": ORG_ID,
+            "warehouse_id": None,
+            "phone_number": "+917385819857",
+            "whatsapp_aliases": ["7385819857", "917385819857", "179822227648579", "9975819201", "919975819201"],
+            "whatsapp_opted_in": True,
+            "hashed_password": hashed_pwd,
+            "is_active": True,
+            "created_at": now_iso,
+        },
+        {
             "id": "usr_supplychain",
             "email": "supplychain@stockpilot.ai",
             "full_name": "Elena Rostova",
@@ -117,6 +131,7 @@ def init_seed_data():
             "capacity_pallets": 14000,
             "used_pallets": 9200,
             "cold_storage_capacity": 5000,
+            "shipping_capacity_units": 15000,
             "is_operational": True,
             "operating_cost_per_pallet": 1.15,
             "created_at": now_iso,
@@ -134,6 +149,7 @@ def init_seed_data():
             "capacity_pallets": 9500,
             "used_pallets": 7400,
             "cold_storage_capacity": 3500,
+            "shipping_capacity_units": 10000,
             "is_operational": True,
             "operating_cost_per_pallet": 1.45,
             "created_at": now_iso,
@@ -151,6 +167,7 @@ def init_seed_data():
             "capacity_pallets": 11000,
             "used_pallets": 6800,
             "cold_storage_capacity": 3800,
+            "shipping_capacity_units": 12000,
             "is_operational": True,
             "operating_cost_per_pallet": 1.10,
             "created_at": now_iso,
@@ -168,6 +185,7 @@ def init_seed_data():
             "capacity_pallets": 12500,
             "used_pallets": 7100,
             "cold_storage_capacity": 4200,
+            "shipping_capacity_units": 13000,
             "is_operational": True,
             "operating_cost_per_pallet": 1.25,
             "created_at": now_iso,
@@ -527,6 +545,7 @@ def init_seed_data():
         db.set_document("inventory_batches", b["id"], b_doc)
 
     # 7. Aggregate Inventory by Warehouse & Product
+    products_map = {p["id"]: p for p in products}
     inventory_items = {}
     for b in batches_data:
         key = f"{b['warehouse_id']}_{b['product_id']}"
@@ -541,8 +560,8 @@ def init_seed_data():
                 "available_quantity": 0,
                 "damaged_quantity": 0,
                 "in_transit_quantity": 0,
-                "safety_stock": 250,
-                "reorder_point": 500,
+                "safety_stock": products_map.get(b["product_id"], {}).get("min_safety_stock", 50),
+                "reorder_point": products_map.get(b["product_id"], {}).get("reorder_point", 100),
                 "updated_at": now_iso,
             }
         inventory_items[key]["total_quantity"] += b["quantity"]

@@ -1,10 +1,15 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.core.database import db
-from app.core.security import ROLE_SUPER_ADMIN, ROLE_ORG_ADMIN
+from app.core.security import ROLE_SUPER_ADMIN
+from app.core.permissions import (
+    PERM_WAREHOUSES_MANAGE,
+    get_authorized_warehouses,
+    user_has_permission
+)
 from app.models.domain import Warehouse, Destination
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_user, require_permission
 from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses & Network"])
@@ -13,6 +18,12 @@ router = APIRouter(prefix="/warehouses", tags=["Warehouses & Network"])
 def list_warehouses(current_user: dict = Depends(get_current_user)):
     org_id = current_user["org_id"] if current_user.get("role") != ROLE_SUPER_ADMIN else None
     warehouses = db.query("warehouses", org_id=org_id)
+    
+    # Location-scoping: filter if user is restricted to specific warehouse(s)
+    allowed = get_authorized_warehouses(current_user)
+    if allowed is not None:
+        warehouses = [w for w in warehouses if w["id"] in allowed]
+
     return [Warehouse(**w) for w in warehouses]
 
 @router.get("/destinations", response_model=List[Destination])
@@ -36,7 +47,7 @@ class WarehouseCreateRequest(BaseModel):
 @router.post("", response_model=Warehouse)
 def create_warehouse(
     req: WarehouseCreateRequest,
-    current_user: dict = Depends(require_roles([ROLE_SUPER_ADMIN, ROLE_ORG_ADMIN]))
+    current_user: dict = Depends(require_permission(PERM_WAREHOUSES_MANAGE))
 ):
     wh_id = f"wh_{req.city.lower().replace(' ', '_')}_{req.code.lower()}"
     new_wh = {
@@ -73,10 +84,11 @@ def create_warehouse(
 @router.post("/{warehouse_id}/toggle-operational", response_model=Warehouse)
 def toggle_operational_status(
     warehouse_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission(PERM_WAREHOUSES_MANAGE))
 ):
     """
     Toggles warehouse operational status to simulate disruptions (e.g. blizzard, power outage, strike).
+    Requires 'warehouses.manage' permission.
     """
     wh = db.get_document("warehouses", warehouse_id)
     if not wh or (current_user.get("role") != ROLE_SUPER_ADMIN and wh.get("org_id") != current_user["org_id"]):

@@ -128,10 +128,10 @@ export const IoTPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900 border border-slate-800 text-white">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">
+            <span className="text-xs font-bold uppercase tracking-widest text-[#0D9488]">
               Cold-Chain Environmental Control
             </span>
-            <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">
+            <span className="text-xs px-2 py-0.5 rounded bg-[#0D9488]/15 text-[#0D9488] font-mono font-bold">
               Authenticated ESP32 Sensors
             </span>
           </div>
@@ -146,7 +146,7 @@ export const IoTPage: React.FC = () => {
         {/* Device Switcher */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs">
-            <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+            <Radio className="w-4 h-4 text-[#0D9488] animate-pulse" />
             <select
               value={selectedDeviceId}
               onChange={(e) => setSelectedDeviceId(e.target.value)}
@@ -224,7 +224,7 @@ export const IoTPage: React.FC = () => {
                 Hourly temperature trajectory showing automated cold-chain regulation compliance.
               </p>
             </div>
-            <span className="text-[10px] font-mono font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded">
+            <span className="text-[10px] font-mono font-bold text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded">
               24 Intervals
             </span>
           </div>
@@ -268,7 +268,7 @@ export const IoTPage: React.FC = () => {
         {/* Interactive Hardware Simulator Tool */}
         <div className="lg:col-span-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-cyan-400" />
+            <Activity className="w-4 h-4 text-[#0D9488]" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
               ESP32 Telemetry Injector
             </h3>
@@ -282,7 +282,7 @@ export const IoTPage: React.FC = () => {
             <div>
               <div className="flex justify-between items-center mb-1.5 font-bold">
                 <span className="text-slate-700 dark:text-slate-300">Simulate Temp (°C)</span>
-                <span className={`font-mono text-sm ${simTemp > (activeDevice?.temp_max_threshold || 8) ? 'text-rose-400 font-black' : 'text-cyan-400'}`}>
+                <span className={`font-mono text-sm ${simTemp > (activeDevice?.temp_max_threshold || 8) ? 'text-[#17324D] font-black' : 'text-[#0D9488]'}`}>
                   {simTemp.toFixed(1)}°C
                 </span>
               </div>
@@ -293,7 +293,7 @@ export const IoTPage: React.FC = () => {
                 step="0.5"
                 value={simTemp}
                 onChange={(e) => setSimTemp(parseFloat(e.target.value))}
-                className="w-full accent-cyan-500 cursor-pointer"
+                className="w-full accent-[#0D9488] cursor-pointer"
               />
               <div className="flex justify-between text-[9px] text-slate-500 mt-0.5">
                 <span>-30°C (Cryo)</span>
@@ -322,14 +322,14 @@ export const IoTPage: React.FC = () => {
             {/* Door Switch */}
             <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
               <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
-                {simDoorOpen ? <DoorOpen className="w-4 h-4 text-rose-400" /> : <DoorClosed className="w-4 h-4 text-emerald-400" />}
+                {simDoorOpen ? <DoorOpen className="w-4 h-4 text-[#17324D]" /> : <DoorClosed className="w-4 h-4 text-[#0D9488]" />}
                 <span>Cold Room Door State</span>
               </div>
               <button
                 type="button"
                 onClick={() => setSimDoorOpen(!simDoorOpen)}
                 className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
-                  simDoorOpen ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-400'
+                  simDoorOpen ? 'bg-[#17324D]/15 text-[#17324D]' : 'bg-slate-800 text-slate-400'
                 }`}
               >
                 {simDoorOpen ? 'DOOR AJAR' : 'CLOSED'}
@@ -339,7 +339,7 @@ export const IoTPage: React.FC = () => {
             <button
               onClick={handleInjectTelemetry}
               disabled={simulating}
-              className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md shadow-cyan-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              className="w-full py-2.5 rounded-xl bg-[#0D9488] hover:bg-[#0D9488] text-white font-bold text-xs shadow-md shadow-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
             >
               <Send className="w-3.5 h-3.5" />
               {simulating ? 'Transmitting...' : 'Inject Telemetry Reading'}
@@ -385,16 +385,16 @@ export const IoTPage: React.FC = () => {
                   <tr key={alt.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-sans uppercase ${
-                        alt.severity === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
+                        alt.severity === 'critical' ? 'bg-[#17324D]/15 text-[#17324D]' : 'bg-[#17324D]/15 text-[#17324D]'
                       }`}>
                         {alt.severity}
                       </span>
                     </td>
-                    <td className="font-mono text-sky-400">{alt.device_id}</td>
+                    <td className="font-mono text-[#0D9488]">{alt.device_id}</td>
                     <td className="font-sans font-medium text-slate-800 dark:text-slate-200 max-w-sm">
                       {alt.message}
                     </td>
-                    <td className="text-right font-bold text-rose-400">
+                    <td className="text-right font-bold text-[#17324D]">
                       {alt.reading_value.toFixed(1)}
                     </td>
                     <td className="text-right text-slate-400">
@@ -405,7 +405,7 @@ export const IoTPage: React.FC = () => {
                     </td>
                     <td>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-sans ${
-                        alt.acknowledged ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                        alt.acknowledged ? 'bg-[#0D9488]/10 text-[#0D9488]' : 'bg-[#17324D]/10 text-[#17324D]'
                       }`}>
                         {alt.acknowledged ? 'ACKNOWLEDGED' : 'ACTIVE EXCURSION'}
                       </span>
@@ -414,7 +414,7 @@ export const IoTPage: React.FC = () => {
                       {!alt.acknowledged ? (
                         <button
                           onClick={() => handleAcknowledgeAlert(alt.id)}
-                          className="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition-colors font-sans"
+                          className="px-2.5 py-1 rounded bg-[#0D9488] hover:bg-[#0D9488]/100 text-white text-[11px] font-bold transition-colors font-sans"
                         >
                           Acknowledge
                         </button>

@@ -129,10 +129,10 @@ export const InventoryPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900 border border-slate-800 text-white">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">
+            <span className="text-xs font-bold uppercase tracking-widest text-[#0D9488]">
               Authoritative Stock Engine
             </span>
-            <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+            <span className="text-xs px-2 py-0.5 rounded bg-[#0D9488]/20 text-[#0D9488] font-mono font-bold">
               Append-Only Ledger
             </span>
           </div>
@@ -148,14 +148,14 @@ export const InventoryPage: React.FC = () => {
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={() => setActionModal('receive')}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0D9488] text-white font-bold text-xs shadow-md shadow-sm flex items-center gap-1.5 transition-all"
           >
             <ArrowDownLeft className="w-4 h-4" />
             Receive Stock
           </button>
           <button
             onClick={() => setActionModal('dispatch')}
-            className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-600/30 flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0D9488]/100 text-white font-bold text-xs shadow-md shadow-sm flex items-center gap-1.5 transition-all"
           >
             <ArrowUpRight className="w-4 h-4" />
             Dispatch Stock
@@ -207,7 +207,7 @@ export const InventoryPage: React.FC = () => {
           onClick={() => setActiveTab('inventory')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
             activeTab === 'inventory'
-              ? 'bg-sky-500 text-white'
+              ? 'bg-[#0D9488]/100 text-white'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
@@ -217,20 +217,20 @@ export const InventoryPage: React.FC = () => {
           onClick={() => setActiveTab('batches')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
             activeTab === 'batches'
-              ? 'bg-sky-500 text-white'
+              ? 'bg-[#0D9488]/100 text-white'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           Batch & Expiry Controls ({batches.length})
           {nearExpiryBatches.length > 0 && (
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="w-2 h-2 rounded-full bg-[#17324D]/15" />
           )}
         </button>
         <button
           onClick={() => setActiveTab('ledger')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
             activeTab === 'ledger'
-              ? 'bg-sky-500 text-white'
+              ? 'bg-[#0D9488]/100 text-white'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
@@ -261,7 +261,7 @@ export const InventoryPage: React.FC = () => {
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="font-bold text-slate-900 dark:text-slate-100">
                         <div>{item.product_name}</div>
-                        <span className="text-[10px] text-sky-400 font-mono font-normal">{item.product_sku}</span>
+                        <span className="text-[10px] text-[#0D9488] font-mono font-normal">{item.product_sku}</span>
                       </td>
                       <td className="text-slate-700 dark:text-slate-300 font-sans font-medium">
                         {item.warehouse_name}
@@ -269,13 +269,13 @@ export const InventoryPage: React.FC = () => {
                       <td>
                         <span className={`text-[10px] px-2 py-0.5 rounded font-bold capitalize font-sans ${
                           item.handling === 'cold_chain'
-                            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                            ? 'bg-[#0D9488]/10 text-[#0D9488] border border-[#0D9488]/30'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
                         }`}>
                           {item.handling.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className={`text-right font-bold text-sm ${isLow ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      <td className={`text-right font-bold text-sm ${isLow ? 'text-[#17324D]' : 'text-[#0D9488]'}`}>
                         {item.available_quantity.toLocaleString()} {item.unit}
                       </td>
                       <td className="text-right text-slate-400">
@@ -286,7 +286,7 @@ export const InventoryPage: React.FC = () => {
                       </td>
                       <td>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-sans ${
-                          isLow ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'
+                          isLow ? 'bg-[#17324D]/10 text-[#17324D]' : 'bg-[#0D9488]/10 text-[#0D9488]'
                         }`}>
                           {isLow ? 'LOW STOCK' : 'NOMINAL'}
                         </span>
@@ -323,7 +323,7 @@ export const InventoryPage: React.FC = () => {
                   const isExpiringSoon = daysLeft <= 30;
                   return (
                     <tr key={b.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="font-bold text-sky-400 font-mono">
+                      <td className="font-bold text-[#0D9488] font-mono">
                         {b.batch_number}
                         <div className="text-[10px] text-slate-500 font-sans font-normal">{b.supplier_reference}</div>
                       </td>
@@ -334,7 +334,7 @@ export const InventoryPage: React.FC = () => {
                         {b.warehouse_name}
                       </td>
                       <td className="text-slate-400">{b.mfg_date}</td>
-                      <td className={`font-bold ${isExpiringSoon ? 'text-rose-400' : 'text-slate-300'}`}>
+                      <td className={`font-bold ${isExpiringSoon ? 'text-[#17324D]' : 'text-slate-300'}`}>
                         {b.expiry_date}
                       </td>
                       <td className="text-right font-bold text-white">
@@ -344,8 +344,8 @@ export const InventoryPage: React.FC = () => {
                       <td>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-sans ${
                           isExpiringSoon
-                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse'
-                            : 'bg-emerald-500/10 text-emerald-400'
+                            ? 'bg-[#17324D]/15 text-[#17324D] border border-[#17324D]/25 animate-pulse'
+                            : 'bg-[#0D9488]/10 text-[#0D9488]'
                         }`}>
                           {isExpiringSoon ? `EXPIRING (${daysLeft}d)` : 'ACTIVE'}
                         </span>
@@ -380,16 +380,16 @@ export const InventoryPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono-num">
                 {movements.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="font-mono text-sky-400 text-[11px]">
+                    <td className="font-mono text-[#0D9488] text-[11px]">
                       {m.correlation_id}
                     </td>
                     <td>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase font-sans ${
                         m.movement_type === 'receipt'
-                          ? 'bg-emerald-500/10 text-emerald-400'
+                          ? 'bg-[#0D9488]/10 text-[#0D9488]'
                           : m.movement_type === 'dispatch'
-                          ? 'bg-sky-500/10 text-sky-400'
-                          : 'bg-amber-500/10 text-amber-400'
+                          ? 'bg-[#0D9488]/10 text-[#0D9488]'
+                          : 'bg-[#17324D]/10 text-[#17324D]'
                       }`}>
                         {m.movement_type}
                       </span>
@@ -400,7 +400,7 @@ export const InventoryPage: React.FC = () => {
                     <td className="text-slate-400 font-sans">
                       {m.source_name} ➔ {m.destination_name}
                     </td>
-                    <td className={`text-right font-bold ${m.quantity_changed > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                    <td className={`text-right font-bold ${m.quantity_changed > 0 ? 'text-[#0D9488]' : 'text-slate-300'}`}>
                       {m.quantity_changed > 0 ? `+${m.quantity_changed}` : m.quantity_changed}
                     </td>
                     <td className="text-right text-white font-bold">
@@ -436,7 +436,7 @@ export const InventoryPage: React.FC = () => {
                 <select
                   value={formWarehouse}
                   onChange={(e) => setFormWarehouse(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-[#0D9488]"
                 >
                   {warehouses.map(w => (
                     <option key={w.id} value={w.id}>{w.name} ({w.city})</option>
@@ -449,7 +449,7 @@ export const InventoryPage: React.FC = () => {
                 <select
                   value={formProduct}
                   onChange={(e) => setFormProduct(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-[#0D9488]"
                 >
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
@@ -516,7 +516,7 @@ export const InventoryPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold shadow-md shadow-sky-600/30"
+                  className="px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0D9488]/100 text-white font-bold shadow-md shadow-sm"
                 >
                   Execute Mutation
                 </button>

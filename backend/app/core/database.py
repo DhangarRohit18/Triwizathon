@@ -21,10 +21,21 @@ class TransactionalDataStore:
                     cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, persistence_file: str = "backend/data/stockpilot_store.json"):
+    def __init__(self, persistence_file: Optional[str] = None):
         if self._initialized:
             return
-        self.persistence_file = persistence_file
+        if not persistence_file or persistence_file == "backend/data/stockpilot_store.json":
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            c1 = os.path.join(base_dir, "data", "stockpilot_store.json")
+            c2 = os.path.join(base_dir, "backend", "data", "stockpilot_store.json")
+            if os.path.exists(c1):
+                self.persistence_file = c1
+            elif os.path.exists(c2):
+                self.persistence_file = c2
+            else:
+                self.persistence_file = c1
+        else:
+            self.persistence_file = persistence_file
         self._collections: Dict[str, Dict[str, Dict[str, Any]]] = {
             "organizations": {},
             "users": {},
@@ -48,6 +59,7 @@ class TransactionalDataStore:
             "integration_settings": {},
             "audit_logs": {},
             "processed_idempotency_keys": {},
+            "iot_aggregates": {},
         }
         self.lock = threading.RLock()
         self._load_from_disk()
@@ -87,11 +99,13 @@ class TransactionalDataStore:
             now_iso = datetime.now(timezone.utc).isoformat()
             if merge and doc_id in col:
                 existing = col[doc_id]
-                updated = {**existing, **data, "updated_at": now_iso}
+                new_ver = existing.get("_version", 1) + 1
+                updated = {**existing, **data, "_version": new_ver, "updated_at": now_iso}
                 col[doc_id] = updated
             else:
                 updated = {
                     "id": doc_id,
+                    "_version": data.get("_version", 1),
                     "created_at": data.get("created_at", now_iso),
                     "updated_at": now_iso,
                     **data
@@ -154,10 +168,20 @@ class TransactionalDataStore:
         """
         Executes a callable inside an exclusive write lock to ensure atomic multi-doc operations.
         Prevents race conditions in inventory mutations and transfer approvals.
+        Includes complete transactional rollback if an exception is raised during execution.
         """
+        import copy
         with self.lock:
-            res = transaction_fn(self)
-            self.save_to_disk()
-            return res
+            # Create isolated deep snapshot of entire store for atomic rollback
+            snapshot = {col: {k: copy.deepcopy(v) for k, v in docs.items()} for col, docs in self._collections.items()}
+            try:
+                res = transaction_fn(self)
+                self.save_to_disk()
+                return res
+            except Exception as e:
+                # Rollback to pre-transaction state
+                self._collections = snapshot
+                self.save_to_disk()
+                raise e
 
 db = TransactionalDataStore()

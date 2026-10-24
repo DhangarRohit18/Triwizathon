@@ -10,96 +10,268 @@ import {
   MessageSquare, 
   Users, 
   Compass,
-  ArrowUpRight
+  Truck,
+  ScanLine,
+  Server,
+  Building2,
+  LogIn
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { RoleType } from '../types';
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Operational Dashboard', icon: LayoutDashboard },
-  { to: '/optimizer', label: 'Distribution Optimizer', icon: Cpu, badge: 'OR-Tools' },
-  { to: '/forecasting', label: 'Demand Forecasting', icon: TrendingUp },
-  { to: '/inventory', label: 'Inventory & FEFO Ledger', icon: Boxes },
-  { to: '/iot', label: 'IoT Cold-Chain Telemetry', icon: ThermometerSnowflake, badge: 'ESP32' },
-  { to: '/qr', label: 'QR Scanner & Labels', icon: QrCode },
-  { to: '/whatsapp', label: 'WhatsApp Bot Simulator', icon: MessageSquare, badge: 'Cloud API' },
-  { to: '/users', label: 'Users & Role Admin', icon: Users },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: any;
+  badge?: string;
+  allowedRoles: RoleType[];
+}
+
+const ALL_NAV_ITEMS: NavItem[] = [
+  // Super Admin Navigation
+  { 
+    to: '/', 
+    label: 'Cluster Health & Platform', 
+    icon: Server, 
+    badge: 'SYSTEM',
+    allowedRoles: ['super_admin'] 
+  },
+  { 
+    to: '/users', 
+    label: 'Enterprise Role Admin', 
+    icon: Users,
+    allowedRoles: ['super_admin'] 
+  },
+  { 
+    to: '/whatsapp', 
+    label: 'WhatsApp Bot Gateway', 
+    icon: MessageSquare, 
+    badge: 'GATEWAY',
+    allowedRoles: ['super_admin'] 
+  },
+
+  // Org Admin Navigation
+  { 
+    to: '/', 
+    label: 'Network Governance & Hubs', 
+    icon: Building2, 
+    badge: 'DIRECTOR',
+    allowedRoles: ['org_admin'] 
+  },
+  { 
+    to: '/optimizer', 
+    label: 'Distribution Optimizer', 
+    icon: Cpu, 
+    badge: 'OR-TOOLS',
+    allowedRoles: ['org_admin'] 
+  },
+  { 
+    to: '/inventory', 
+    label: 'Global Stock Ledger', 
+    icon: Boxes,
+    allowedRoles: ['org_admin'] 
+  },
+  { 
+    to: '/users', 
+    label: 'Team Provisioning', 
+    icon: Users,
+    allowedRoles: ['org_admin'] 
+  },
+
+  // Supply Chain Manager Navigation
+  { 
+    to: '/', 
+    label: 'MIP Solver & Approvals', 
+    icon: LayoutDashboard, 
+    badge: 'STUDIO',
+    allowedRoles: ['supply_chain_manager'] 
+  },
+  { 
+    to: '/optimizer', 
+    label: 'Distribution Optimizer', 
+    icon: Cpu, 
+    badge: 'MIP SOLVER',
+    allowedRoles: ['supply_chain_manager'] 
+  },
+  { 
+    to: '/forecasting', 
+    label: 'Demand Forecasting', 
+    icon: TrendingUp,
+    allowedRoles: ['supply_chain_manager'] 
+  },
+  { 
+    to: '/inventory', 
+    label: 'Multi-Hub Inventory Matrix', 
+    icon: Boxes,
+    allowedRoles: ['supply_chain_manager'] 
+  },
+
+  // Warehouse Manager Navigation
+  { 
+    to: '/', 
+    label: 'Facility Dock Management', 
+    icon: LayoutDashboard, 
+    badge: 'FACILITY',
+    allowedRoles: ['warehouse_manager'] 
+  },
+  { 
+    to: '/iot', 
+    label: 'IoT Telemetry Excursions', 
+    icon: ThermometerSnowflake, 
+    badge: 'ESP32',
+    allowedRoles: ['warehouse_manager'] 
+  },
+  { 
+    to: '/inventory', 
+    label: 'Local Hub Stock & Batches', 
+    icon: Boxes,
+    allowedRoles: ['warehouse_manager'] 
+  },
+
+  // Distributor / Field Operator Navigation
+  { 
+    to: '/', 
+    label: 'Delivery Manifest & Handover', 
+    icon: Truck, 
+    badge: 'ROUTE',
+    allowedRoles: ['distributor'] 
+  },
+
+  // Warehouse Operator Navigation
+  { 
+    to: '/', 
+    label: 'Scan & Wave Pick Station', 
+    icon: QrCode, 
+    badge: 'STATION',
+    allowedRoles: ['operator'] 
+  },
+  { 
+    to: '/scanner', 
+    label: 'Optical Camera Scanner', 
+    icon: ScanLine, 
+    badge: 'CAMERA',
+    allowedRoles: ['operator'] 
+  },
 ];
+
+const ROLE_DISPLAY_NAMES: Record<RoleType, string> = {
+  super_admin: 'Super Admin',
+  org_admin: 'Organization Admin',
+  supply_chain_manager: 'Supply Chain Manager',
+  warehouse_manager: 'Warehouse Manager',
+  distributor: 'Distributor / Fleet',
+  operator: 'Warehouse Operator',
+};
 
 export const Sidebar: React.FC = () => {
   const { activeRole } = useAppStore();
 
+  const roleNavItems = ALL_NAV_ITEMS.filter(item => item.allowedRoles.includes(activeRole));
+
   return (
-    <aside className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col justify-between h-screen sticky top-0">
+    <aside className="w-64 shrink-0 bg-[#17324D] border-r border-[#17324D] flex flex-col justify-between h-screen sticky top-0 text-white select-none">
       {/* Brand Header */}
       <div>
-        <div className="h-16 px-5 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 via-teal-500 to-emerald-400 p-0.5 flex items-center justify-center shadow-lg shadow-sky-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <Compass className="w-5 h-5 text-sky-400" />
-            </div>
+        <div className="h-16 px-5 flex items-center gap-3 border-b border-white/10 bg-[#17324D]">
+          <div className="w-8 h-8 rounded-lg bg-[#0D9488] flex items-center justify-center text-white shadow-xs">
+            <Compass className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5 font-black text-sm tracking-tight text-slate-900 dark:text-white">
+            <div className="flex items-center gap-1.5 font-bold text-sm tracking-tight text-white font-mono">
               <span>STOCKPILOT</span>
-              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
+              <span className="text-[10px] font-bold px-1 py-0.2 rounded bg-[#0D9488]/30 text-white border border-[#0D9488]/50">
                 AI
               </span>
             </div>
-            <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 tracking-wider uppercase">
-              Distribution Engine
+            <div className="text-[10px] font-medium text-white/60 tracking-wider uppercase font-mono">
+              BioLogistics Platform
             </div>
           </div>
         </div>
 
-        {/* Navigation Links */}
+        {/* Dynamic Navigation Links strictly filtered to this role */}
         <nav className="p-3 space-y-1">
-          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Core Modules
+          <div className="px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-white/50 flex items-center justify-between">
+            <span>{ROLE_DISPLAY_NAMES[activeRole]}</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-white font-bold border border-white/15 font-mono">
+              {roleNavItems.length} Module{roleNavItems.length > 1 ? 's' : ''}
+            </span>
           </div>
-          {NAV_ITEMS.map((item) => {
+
+          {roleNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
-                key={item.to}
+                key={`${item.to}-${item.label}`}
                 to={item.to}
+                end={item.to === '/'}
                 className={({ isActive }) =>
-                  `flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  `flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono transition-colors duration-150 border ${
                     isActive
-                      ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-slate-200'
+                      ? 'bg-white/10 border-l-2 border-[#0D9488] border-y-transparent border-r-transparent text-white font-bold'
+                      : 'border-transparent text-white/70 hover:text-white hover:bg-white/5'
                   }`
                 }
               >
                 <div className="flex items-center gap-2.5">
-                  <Icon className="w-4 h-4 shrink-0" />
+                  <Icon className="w-4 h-4 shrink-0 text-[#0D9488]" />
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/20 dark:bg-slate-800 text-slate-200 uppercase tracking-wider">
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/15 bg-white/5 text-white/70 uppercase tracking-wider">
                     {item.badge}
                   </span>
                 )}
               </NavLink>
             );
           })}
+
+          {/* Quick link to Switch Persona / Login Portal */}
+          <div className="pt-3 mt-3 border-t border-white/10">
+            <NavLink
+              to="/login"
+              className={({ isActive }) =>
+                `flex items-center justify-between px-3 py-2 rounded-lg text-xs font-mono transition-colors duration-150 border ${
+                  isActive
+                    ? 'bg-white/10 border-l-2 border-[#0D9488] text-white font-bold'
+                    : 'border-transparent text-white/60 hover:text-white hover:bg-white/5'
+                }`
+              }
+            >
+              <div className="flex items-center gap-2.5">
+                <LogIn className="w-4 h-4 shrink-0 text-[#0D9488]" />
+                <span>Switch / Login Portal</span>
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/15 bg-white/10 text-white/80 uppercase tracking-wider">
+                6 ROLES
+              </span>
+            </NavLink>
+          </div>
         </nav>
       </div>
 
       {/* Footer Info: Current Role context */}
-      <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-900/40">
-        <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center justify-between">
+      <div className="p-4 border-t border-white/10 bg-[#17324D]">
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-[10px] uppercase font-mono font-bold text-white/50 flex items-center justify-between">
             <span>Operating Persona</span>
-            <span className="w-2 h-2 rounded-full bg-sky-400" />
+            <span className="w-2 h-2 rounded-full bg-[#0D9488]" />
           </div>
-          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 mt-1 capitalize">
-            {activeRole.replace('_', ' ')}
+          <div className="text-xs font-bold text-white mt-1 capitalize font-mono">
+            {activeRole.replace(/_/g, ' ')}
           </div>
-          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Full enterprise role isolation active
+          <div className="text-[10px] text-white/60 mt-0.5 font-mono">
+            Role isolation enforced
           </div>
+          <NavLink
+            to="/login"
+            className="mt-2.5 block text-center py-1.5 px-2 rounded-lg bg-[#0D9488] hover:bg-[#0B7C72] text-white text-[10px] font-mono font-bold transition-colors cursor-pointer"
+          >
+            Change Persona ➔
+          </NavLink>
         </div>
       </div>
     </aside>
   );
 };
+export default Sidebar;

@@ -38,7 +38,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   token: localStorage.getItem('stockpilot_token') || 'demo_token',
   activeRole: (localStorage.getItem('stockpilot_role') as RoleType) || 'supply_chain_manager',
   selectedWarehouseId: 'all',
-  theme: (localStorage.getItem('stockpilot_theme') as 'dark' | 'light') || 'dark',
+  theme: (localStorage.getItem('stockpilot_theme') as 'dark' | 'light') || 'light',
   toasts: [],
 
   setUser: (user, token) => {

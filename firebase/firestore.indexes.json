@@ -14,6 +14,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "org_id", "order": "ASCENDING" },
+        { "fieldPath": "warehouse_id", "order": "ASCENDING" },
+        { "fieldPath": "expiry_date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventory_batches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "org_id", "order": "ASCENDING" },
         { "fieldPath": "product_id", "order": "ASCENDING" },
         { "fieldPath": "expiry_date", "order": "ASCENDING" }
       ]
@@ -25,6 +34,24 @@
         { "fieldPath": "org_id", "order": "ASCENDING" },
         { "fieldPath": "product_id", "order": "ASCENDING" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventory_movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "org_id", "order": "ASCENDING" },
+        { "fieldPath": "source_warehouse_id", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "org_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
     },
     {
@@ -51,6 +78,23 @@
         { "fieldPath": "org_id", "order": "ASCENDING" },
         { "fieldPath": "acknowledged", "order": "ASCENDING" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "org_id", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "allocation_recommendations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "org_id", "order": "ASCENDING" },
+        { "fieldPath": "run_id", "order": "ASCENDING" },
+        { "fieldPath": "total_transport_cost", "order": "ASCENDING" }
       ]
     }
   ],

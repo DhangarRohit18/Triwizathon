@@ -4,14 +4,31 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.env
+.env*
 
 # Build outputs
 dist/
 build/
 .pytest_cache/
 *.tsbuildinfo
+test_iot_results.txt
+backend/test_iot_results.txt
+
+# Flutter & Mobile
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+
+# WhatsApp session auth
+.baileys_auth/
+baileys_auth_info/
 
 # IDE
 .vscode/
 .idea/
 *.swp
+
