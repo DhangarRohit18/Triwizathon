@@ -97,7 +97,7 @@ async function forwardToStockPilot(phone, name, text) {
 
   return new Promise((resolve) => {
     try {
-      const parsed = new URL(`${STOCKPILOT_API_BASE}/whatsapp/simulator/chat`);
+      const parsed = new URL(`${STOCKPILOT_API_BASE}/whatsapp/bridge/incoming`);
       const req = http.request(
         {
           hostname: parsed.hostname,

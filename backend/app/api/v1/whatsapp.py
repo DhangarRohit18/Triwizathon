@@ -294,3 +294,26 @@ def request_bridge_pairing_code(req: BridgePairRequest):
         "instructions": "Open WhatsApp on phone > Settings > Linked Devices > Link with phone number instead > Enter pairing code."
     }
 
+
+class BridgeIncomingRequest(BaseModel):
+    from_number: str
+    message_text: str
+    user_name: Optional[str] = None
+    org_id: Optional[str] = "org_triwiz_01"
+
+
+@router.post("/bridge/incoming", summary="Process live incoming WhatsApp message from Baileys Bridge")
+def handle_bridge_incoming_message(req: BridgeIncomingRequest):
+    """
+    Direct endpoint for live mobile WhatsApp messages relayed through the WhatsApp Web Linked Device Bridge.
+    Processes the inquiry using live inventory, real RBAC roles, and deterministic NLP.
+    """
+    res = WhatsAppBotService.process_incoming_message(
+        from_number=req.from_number,
+        message_text=req.message_text,
+        org_id=req.org_id or "org_triwiz_01",
+        is_simulated=False,
+    )
+    return res
+
+
