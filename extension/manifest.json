@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "StockPilot AI — Distribution & Inventory Companion",
+  "version": "1.0.0",
+  "description": "Enterprise supply chain quick-access companion for warehouse stock lookup, cold-chain alerts, and transfer approvals.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "StockPilot AI Companion"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ]
+}

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stockpilot-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PROJECT_NAME=STOCKPILOT AI
+      - SECRET_KEY=stockpilot-super-secret-production-key-triwizathon-2026
+      - IOT_API_KEY=stockpilot-iot-secure-esp32-auth-token
+      - WHATSAPP_API_TOKEN=mock_whatsapp_token_test_123
+      - WHATSAPP_VERIFY_TOKEN=stockpilot_triwiz_verify_2026
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: stockpilot-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

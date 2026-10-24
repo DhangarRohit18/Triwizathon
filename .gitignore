@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+
+# Build outputs
+dist/
+build/
+.pytest_cache/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
