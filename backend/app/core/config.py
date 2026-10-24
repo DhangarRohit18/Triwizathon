@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # Chrome Extension API
     EXTENSION_API_KEY: str = os.getenv("EXTENSION_API_KEY", "stockpilot-ext-v3-authorized-key")
 
+    # WhatsApp Admin Bootstrap & Registration
+    ADMIN_BOOTSTRAP_SECRET: str = os.getenv("ADMIN_BOOTSTRAP_SECRET", "stockpilot-admin-bootstrap-secret-2026")
+    WHATSAPP_INVITATION_EXPIRE_HOURS: int = int(os.getenv("WHATSAPP_INVITATION_EXPIRE_HOURS", "24"))
+    WHATSAPP_CHALLENGE_MAX_ATTEMPTS: int = int(os.getenv("WHATSAPP_CHALLENGE_MAX_ATTEMPTS", "5"))
+
     class Config:
         env_file = ".env"
         case_sensitive = True

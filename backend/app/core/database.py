@@ -60,6 +60,8 @@ class TransactionalDataStore:
             "audit_logs": {},
             "processed_idempotency_keys": {},
             "iot_aggregates": {},
+            "whatsapp_invitations": {},
+            "admin_bootstrap_state": {},
         }
         self.lock = threading.RLock()
         self._load_from_disk()

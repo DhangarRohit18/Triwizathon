@@ -375,10 +375,42 @@ Every collection and document in the system belongs to an organization tenant id
   - `actor_id`: `string`
   - `actor_name`: `string`
   - `actor_role`: `string`
-  - `action`: `string` (`"LOGIN" | "INVENTORY_RECEIPT" | "TRANSFER_APPROVED" | "OPTIMIZATION_EXECUTED" | "ALERT_ACKNOWLEDGED" | "DAMAGE_REPORT"`)
-  - `target_entity`: `string` (`"inventory" | "transfer" | "alert" | "optimization_run" | "user"`)
+  - `action`: `string` (`"LOGIN" | "INVENTORY_RECEIPT" | "TRANSFER_APPROVED" | "OPTIMIZATION_EXECUTED" | "ALERT_ACKNOWLEDGED" | "DAMAGE_REPORT" | "USER_INVITATION_CREATED" | "USER_PHONE_VERIFIED" | "USER_ROLE_REASSIGNED" | "ADMIN_BOOTSTRAP_COMPLETED"`)
+  - `target_entity`: `string` (`"inventory" | "transfer" | "alert" | "optimization_run" | "user" | "whatsapp_invitation"`)
   - `entity_id`: `string`
   - `details`: `map` (Structured key-value context of the event)
   - `client_ip`: `string | null`
   - `client_user_agent`: `string | null`
   - `timestamp`: `timestamp`
+
+### 20. `whatsapp_invitations`
+- **Collection**: `/whatsapp_invitations/{invitation_id}`
+- **Purpose**: Pending WhatsApp mobile registration invitations, cryptographic verification challenge codes, attempt counters, and expiration lifecycle.
+- **Fields**:
+  - `id`: `string` (e.g., `"inv_a9f24b..."`)
+  - `org_id`: `string`
+  - `phone_number`: `string` (E.164 normalized mobile number e.g. `"+919876543210"`)
+  - `role`: `string` (`"super_admin" | "org_admin" | "supply_chain_manager" | "warehouse_manager" | "operator" | "distributor"`)
+  - `warehouse_id`: `string | null`
+  - `warehouse_ids`: `array<string>`
+  - `challenge_hash`: `string` (SHA256 hash of single-use 6-digit numeric verification code)
+  - `status`: `string` (`"pending" | "verified" | "expired" | "revoked"`)
+  - `attempts`: `number` (Failed challenge entry counter)
+  - `max_attempts`: `number` (Default 5)
+  - `created_by`: `string` (User ID of administrator who issued invitation)
+  - `created_by_name`: `string`
+  - `created_at`: `timestamp`
+  - `expires_at`: `timestamp` (24-hour expiration window)
+  - `verified_at`: `timestamp | null`
+
+### 21. `admin_bootstrap_state`
+- **Collection**: `/admin_bootstrap_state/{state_id}`
+- **Purpose**: Tracks platform and organization administrator initial bootstrap enrollment status, preventing unauthorized repeat bootstraps.
+- **Fields**:
+  - `id`: `string` (`"bootstrap_status"`)
+  - `is_bootstrapped`: `boolean`
+  - `bootstrapped_at`: `timestamp | null`
+  - `bootstrapped_phone`: `string | null`
+  - `admin_user_id`: `string | null`
+  - `role`: `string | null`
+

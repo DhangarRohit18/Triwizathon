@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Request, Query, Header, HTTPException, Depends
 from pydantic import BaseModel
+from app.core.config import settings
 from app.core.database import db
 from app.api.deps import get_current_user, require_permission
 from app.core.permissions import (
@@ -10,6 +12,7 @@ from app.core.permissions import (
     PERM_AUDIT_VIEW,
 )
 from app.services.whatsapp_service import WhatsAppBotService
+from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp Cloud API Integration"])
 
@@ -69,16 +72,96 @@ def simulate_whatsapp_chat(
     [SIMULATOR MODE] - Sends a message to the bot engine as if it arrived from WhatsApp.
     Clearly labeled: is_simulated=True, delivery_status=SIMULATED_LOCAL.
     No actual Meta Cloud API calls are made.
-    Use this to test HELP, STATUS, STOCK, ALERTS, APPROVE/REJECT without live credentials.
+    Guards against production identity spoofing when outside explicit development mock mode.
     """
-    from_number = req.from_number or current_user.get("phone_number") or "+13125550103"
+    # Restrict arbitrary from_number spoofing outside explicit mock testing
+    if not settings.USE_FIREBASE_MOCK and current_user.get("role") != "super_admin":
+        from_number = current_user.get("phone_number") or "+13125550103"
+    else:
+        from_number = req.from_number or current_user.get("phone_number") or "+13125550103"
+
     res = WhatsAppBotService.process_incoming_message(
         from_number=from_number,
         message_text=req.message_text,
         org_id=current_user["org_id"],
         is_simulated=True,
     )
-    return {**res, "simulator_note": "This is a SIMULATED WhatsApp interaction. No real message was sent or received."}
+    return {
+        **res,
+        "is_simulated": True,
+        "simulator_note": "This is a SIMULATED WhatsApp interaction. No real message was sent or received."
+    }
+
+
+class AdminBootstrapEndpointRequest(BaseModel):
+    secret: str
+    phone_number: str
+    full_name: Optional[str] = "Master Administrator"
+    role: Optional[str] = "org_admin"
+    org_id: Optional[str] = "org_triwiz_01"
+
+
+@router.post("/admin/bootstrap", summary="Initial administrator bootstrap enrollment")
+def admin_bootstrap_endpoint(req: AdminBootstrapEndpointRequest):
+    """
+    Trusted one-time administrator bootstrap enrollment.
+    Binds the initial administrator's WhatsApp phone number using a protected secret token.
+    Invalidated and locked after successful bootstrap.
+    """
+    res = WhatsAppBotService.execute_admin_bootstrap(
+        from_number=req.phone_number,
+        secret_token=req.secret,
+        role=req.role or "org_admin",
+        org_id=req.org_id or "org_triwiz_01",
+        full_name=req.full_name
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("reply_text") or res.get("error"))
+    return res
+
+
+class AdminBindPhoneRequest(BaseModel):
+    phone_number: str
+
+
+@router.post("/admin/bind-phone", summary="Bind authenticated administrator's WhatsApp phone number")
+def bind_admin_phone(
+    req: AdminBindPhoneRequest,
+    current_user: dict = Depends(require_permission(PERM_USERS_MANAGE))
+):
+    """
+    Authenticated administrator binds or updates their WhatsApp mobile number.
+    Requires active web session with PERM_USERS_MANAGE (Org Admin or Super Admin).
+    """
+    if not WhatsAppBotService.is_valid_phone(req.phone_number):
+        raise HTTPException(status_code=400, detail="Invalid mobile number format. Provide 10-15 digits.")
+
+    e164 = WhatsAppBotService.format_e164(req.phone_number)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    db.set_document("users", current_user["id"], {
+        "phone_number": e164,
+        "whatsapp_opted_in": True,
+        "updated_at": now_iso
+    })
+
+    AuditService.log_event(
+        org_id=current_user["org_id"],
+        actor_id=current_user["id"],
+        actor_name=current_user["full_name"],
+        actor_role=current_user["role"],
+        action="ADMIN_PHONE_BOUND",
+        target_entity="user",
+        entity_id=current_user["id"],
+        details={"phone_number": e164}
+    )
+
+    return {
+        "success": True,
+        "phone_number": e164,
+        "user_id": current_user["id"],
+        "message": f"WhatsApp mobile number {e164} successfully bound to administrator account."
+    }
 
 
 class ConsentUpdateRequest(BaseModel):

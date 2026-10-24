@@ -128,35 +128,31 @@ def ingest_telemetry(
     temp = payload.temperature_c if payload.temperature_c is not None else payload.temperature
     if temp is None:
         raise HTTPException(status_code=400, detail="Temperature reading is required.")
-    return IoTTelemetryService.process_telemetry_reading(
-        device_id=dev_id,
-        temperature_c=temp,
-        humidity_percent=payload.humidity_percent or 50.0,
-        door_open=payload.door_open or False,
-        battery_level_percent=payload.battery_level_percent or 95.0,
-        rssi_dbm=payload.rssi_dbm,
-        boot_count=payload.boot_count,
-        auth_api_key=x_device_api_key,
-        expected_api_key=None,
-        supplied_org_id=payload.supplied_org_id,
-        supplied_warehouse_id=payload.supplied_warehouse_id,
+    payload_dict = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    payload_dict["device_id"] = dev_id
+    payload_dict["temperature"] = temp
+    payload_dict["temperature_c"] = temp
+    return IoTTelemetryService.ingest_reading(
+        payload=payload_dict,
+        auth_api_key=x_device_api_key or "",
+        expected_api_key=settings.IOT_API_KEY
     )
 
 @router.post("/simulator/telemetry", summary="Simulator ingest for demo")
+@router.post("/simulator/inject", summary="Simulator inject for demo")
 def simulator_telemetry(payload: SimulatorPayload):
     temp = payload.temperature_c if payload.temperature_c is not None else payload.temperature
     if temp is None:
         raise HTTPException(status_code=400, detail="Temperature reading required.")
-    res = IoTTelemetryService.process_telemetry_reading(
-        device_id=payload.device_id,
-        temperature_c=temp,
-        humidity_percent=payload.humidity_percent or 50.0,
-        door_open=payload.door_open or False,
-        battery_level_percent=payload.battery_level_percent or 95.0,
+    payload_dict = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    payload_dict["temperature"] = temp
+    payload_dict["temperature_c"] = temp
+    res = IoTTelemetryService.ingest_reading(
+        payload=payload_dict,
         auth_api_key=settings.IOT_API_KEY,
         expected_api_key=settings.IOT_API_KEY
     )
-    return {**res, "simulator_note": "This reading is SIMULATED and does not represent real hardware telemetry."}
+    return {**res, "simulator_note": "This reading is SIMULATED and does not represent real hardware telemetry.", "is_simulated": True}
 
 @router.get("/devices", response_model=List[Dict[str, Any]], summary="List registered IoT devices")
 def list_iot_devices(current_user: dict = Depends(require_permission(PERM_IOT_READINGS_VIEW))):

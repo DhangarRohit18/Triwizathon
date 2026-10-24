@@ -184,6 +184,36 @@ Because reviewers may not have active Meta Business credentials during evaluatio
 - Test permission checks (only managers can approve transfers!).
 - Review logged inbound webhooks and HMAC signatures.
 
+### Admin-Controlled WhatsApp User Registration & Role Assignment
+Administrators can securely manage users and assign permissions directly via WhatsApp:
+
+#### Supported Commands Grammar:
+1. **General & Identity Commands (Read-only)**:
+   - `HELP` / `MENU`: Displays role-scoped available commands (administrators see `USER ...` commands).
+   - `WHOAMI`: Displays sender's name, registered phone number, assigned role, organization, warehouse scope, and active status.
+   - `MYROLE`: Displays current assigned role and human-readable title.
+   - `STATUS`: Displays authorized network inventory summary and monitored warehouse status.
+
+2. **User Management & Role Assignment (Admins only)**:
+   - `USER ADD <phone> [role]`: Generates a pending invitation for the target mobile number with a single-use 6-digit numeric challenge code (expires in 24h, max 5 attempts).
+   - `USER ROLE <phone> <role>`: Reassigns a user's role across the 6 supported roles (`super_admin`, `org_admin`, `supply_chain_manager`, `warehouse_manager`, `operator`, `distributor`). Enforces role hierarchy (Org Admins cannot assign Super Admin) and protects the organization's final active administrator.
+   - `USER WAREHOUSE <phone> <warehouse_id>`: Assigns an authorized warehouse location scope.
+   - `USER REMOVE-WAREHOUSE <phone> <warehouse_id>`: Removes an assigned warehouse scope.
+   - `USER SHOW <phone>`: Displays the target user's allowed profile details, role, and location scopes.
+   - `USER DISABLE <phone>`: Deactivates target user access without deleting audit history.
+   - `USER ENABLE <phone>`: Re-enables account access.
+   - `USER LIST`: Lists registered users and pending invitations within the administrator's organization scope.
+
+3. **Target User Verification & Activation**:
+   - `CONFIRM <code>` or `VERIFY <code>`: The recipient of an invitation verifies their identity using the single-use 6-digit code. Upon confirmation, their WhatsApp number is bound, role permissions activated, and notifications dispatched to both user and administrator.
+
+4. **Secure Initial Administrator Bootstrap**:
+   - Initial administrator enrollment requires an independently trusted setup process using `ADMIN_BOOTSTRAP_SECRET`.
+   - Via WhatsApp: `BOOTSTRAP <secret_token> [role]`
+   - Via REST Endpoint: `POST /api/v1/whatsapp/admin/bootstrap`
+   - Via Web Dashboard: `POST /api/v1/whatsapp/admin/bind-phone`
+   - Unregistered senders cannot declare themselves administrators. Once bootstrapped, the initial setup is permanently locked.
+
 ---
 
 ## 🌡️ IoT Cold-Chain Hardware Telemetry
