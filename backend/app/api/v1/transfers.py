@@ -15,12 +15,15 @@ from app.api.deps import get_current_user, require_permission
 from app.core.permissions import (
     PERM_TRANSFERS_VIEW,
     PERM_TRANSFERS_CREATE,
+    PERM_TRANSFERS_APPROVE,
     PERM_TRANSFERS_DISPATCH,
     PERM_TRANSFERS_RECEIVE,
     PERM_OPTIMIZATION_APPROVE,
     get_authorized_warehouses,
     validate_warehouse_access,
     normalize_role,
+    ROLE_SUPER_ADMIN,
+    ROLE_WAREHOUSE_MANAGER,
     ROLE_DISTRIBUTOR
 )
 from app.services.inventory_service import InventoryService
@@ -149,8 +152,20 @@ def create_transfer(
 @router.post("/approve")
 def approve_or_reject_transfer(
     req: TransferApprovalRequest,
-    current_user: dict = Depends(require_permission(PERM_OPTIMIZATION_APPROVE))
+    current_user: dict = Depends(require_permission(PERM_TRANSFERS_APPROVE))
 ):
+    t = db.get_document("transfers", req.transfer_id)
+    if not t or (current_user.get("role") != ROLE_SUPER_ADMIN and t.get("org_id") != current_user["org_id"]):
+        raise HTTPException(status_code=404, detail="Transfer not found or cross-organization access denied.")
+
+    if current_user.get("role") == ROLE_WAREHOUSE_MANAGER:
+        allowed = get_authorized_warehouses(current_user) or []
+        if t.get("source_warehouse_id") not in allowed and t.get("target_warehouse_id") not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Warehouse manager cannot approve transfers outside assigned facility."
+            )
+
     res = InventoryService.approve_or_reject_transfer(
         transfer_id=req.transfer_id,
         approved=req.approved,

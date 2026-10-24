@@ -36,6 +36,10 @@ class TransactionalDataStore:
                 self.persistence_file = c1
         else:
             self.persistence_file = persistence_file
+        self.persistence_file = os.path.abspath(os.path.normpath(self.persistence_file))
+        self.COLLECTION_ALIASES: Dict[str, str] = {
+            "batches": "inventory_batches",
+        }
         self._collections: Dict[str, Dict[str, Dict[str, Any]]] = {
             "organizations": {},
             "users": {},
@@ -67,14 +71,18 @@ class TransactionalDataStore:
         self._load_from_disk()
         self._initialized = True
 
+    def _resolve_collection(self, collection: str) -> str:
+        return self.COLLECTION_ALIASES.get(collection, collection)
+
     def _load_from_disk(self):
         try:
             if os.path.exists(self.persistence_file):
                 with open(self.persistence_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for col_name, col_data in data.items():
-                        if col_name in self._collections:
-                            self._collections[col_name] = col_data
+                        resolved = self._resolve_collection(col_name)
+                        if resolved in self._collections:
+                            self._collections[resolved] = col_data
         except Exception as e:
             print(f"[WARN] Failed to load data store from {self.persistence_file}: {e}")
 
@@ -87,12 +95,14 @@ class TransactionalDataStore:
             print(f"[WARN] Failed to save data store to {self.persistence_file}: {e}")
 
     def get_document(self, collection: str, doc_id: str) -> Optional[Dict[str, Any]]:
+        collection = self._resolve_collection(collection)
         with self.lock:
             col = self._collections.get(collection, {})
             doc = col.get(doc_id)
             return dict(doc) if doc else None
 
     def set_document(self, collection: str, doc_id: str, data: Dict[str, Any], merge: bool = True) -> Dict[str, Any]:
+        collection = self._resolve_collection(collection)
         with self.lock:
             if collection not in self._collections:
                 self._collections[collection] = {}
@@ -118,6 +128,7 @@ class TransactionalDataStore:
             return dict(col[doc_id])
 
     def delete_document(self, collection: str, doc_id: str) -> bool:
+        collection = self._resolve_collection(collection)
         with self.lock:
             col = self._collections.get(collection, {})
             if doc_id in col:
@@ -135,6 +146,7 @@ class TransactionalDataStore:
         descending: bool = False,
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
+        collection = self._resolve_collection(collection)
         with self.lock:
             col = self._collections.get(collection, {})
             results = []

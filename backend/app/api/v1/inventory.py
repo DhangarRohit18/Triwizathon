@@ -26,7 +26,8 @@ from app.core.permissions import (
     PERM_INVENTORY_ADJUST,
     PERM_DAMAGE_REPORT,
     validate_warehouse_access,
-    get_authorized_warehouses
+    get_authorized_warehouses,
+    ROLE_SUPER_ADMIN
 )
 from app.services.inventory_service import InventoryService
 from app.services.audit_service import AuditService
@@ -249,9 +250,13 @@ def cycle_count(
     req: CycleCountRequest,
     current_user: dict = Depends(require_permission(PERM_INVENTORY_VIEW))
 ):
-    batch = db.get_document("batches", req.batch_id)
-    if batch:
-        validate_warehouse_access(current_user, batch.get("warehouse_id"))
+    batch = db.get_document("inventory_batches", req.batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    if current_user.get("role") != ROLE_SUPER_ADMIN and batch.get("org_id") != current_user["org_id"]:
+        raise HTTPException(status_code=403, detail="Cross-organization batch access denied.")
+    validate_warehouse_access(current_user, batch.get("warehouse_id"))
+
     res = InventoryService.cycle_count(
         req=req,
         actor_id=current_user["id"],
@@ -277,9 +282,13 @@ def adjust_stock(
     req: StockAdjustmentRequest,
     current_user: dict = Depends(require_permission(PERM_INVENTORY_ADJUST))
 ):
-    batch = db.get_document("batches", req.batch_id)
-    if batch:
-        validate_warehouse_access(current_user, batch.get("warehouse_id"))
+    batch = db.get_document("inventory_batches", req.batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    if current_user.get("role") != ROLE_SUPER_ADMIN and batch.get("org_id") != current_user["org_id"]:
+        raise HTTPException(status_code=403, detail="Cross-organization batch access denied.")
+    validate_warehouse_access(current_user, batch.get("warehouse_id"))
+
     res = InventoryService.adjust_stock(
         req=req,
         actor_id=current_user["id"],
@@ -305,9 +314,13 @@ def report_damage(
     req: DamageReportRequest,
     current_user: dict = Depends(require_permission(PERM_DAMAGE_REPORT))
 ):
-    batch = db.get_document("batches", req.batch_id)
-    if batch:
-        validate_warehouse_access(current_user, batch.get("warehouse_id"))
+    batch = db.get_document("inventory_batches", req.batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    if current_user.get("role") != ROLE_SUPER_ADMIN and batch.get("org_id") != current_user["org_id"]:
+        raise HTTPException(status_code=403, detail="Cross-organization batch access denied.")
+    validate_warehouse_access(current_user, batch.get("warehouse_id"))
+
     res = InventoryService.report_damage(
         req=req,
         actor_id=current_user["id"],
@@ -333,9 +346,12 @@ def resolve_discrepancy(
     req: DiscrepancyResolutionRequest,
     current_user: dict = Depends(require_permission(PERM_INVENTORY_ADJUST))
 ):
-    batch = db.get_document("batches", req.batch_id)
-    if batch:
-        validate_warehouse_access(current_user, batch.get("warehouse_id"))
+    batch = db.get_document("inventory_batches", req.batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    if current_user.get("role") != ROLE_SUPER_ADMIN and batch.get("org_id") != current_user["org_id"]:
+        raise HTTPException(status_code=403, detail="Cross-organization batch access denied.")
+    validate_warehouse_access(current_user, batch.get("warehouse_id"))
     res = InventoryService.resolve_discrepancy(
         req=req,
         actor_id=current_user["id"],

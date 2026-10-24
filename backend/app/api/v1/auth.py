@@ -116,6 +116,16 @@ def invite_user(
     if role_val == ROLE_SUPER_ADMIN and current_user.get("role") != ROLE_SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="Only Super Admins can provision other Super Admins.")
 
+    # Prevent granting permissions beyond caller's own permissions
+    if req.permissions and current_user.get("role") != ROLE_SUPER_ADMIN:
+        caller_perms = get_user_effective_permissions(current_user)
+        for p in req.permissions:
+            if p not in caller_perms:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Cannot grant permission '{p}' exceeding your administrative privilege scope."
+                )
+
     # Check if user already exists
     existing = db.query("users", filters={"email": req.email.strip().lower()})
     if existing:
@@ -173,7 +183,7 @@ def update_user_profile(
 ):
     """
     Admin updates user role, warehouse scopes, permissions, or activation state.
-    Guards against unauthorized self-promotion and deactivating the final org_admin.
+    Guards against unauthorized self-promotion, privilege escalation, and deactivating the final org_admin.
     """
     target_user = db.get_document("users", user_id)
     if not target_user:
@@ -183,9 +193,34 @@ def update_user_profile(
     if current_user.get("role") != ROLE_SUPER_ADMIN and target_user.get("org_id") != current_user["org_id"]:
         raise HTTPException(status_code=403, detail="Cross-organization user modification denied.")
 
-    # Self-promotion check
+    # Self-promotion / self-role change prevention
+    if user_id == current_user["id"] and req.role is not None and req.role.value != current_user.get("role"):
+        if current_user.get("role") != ROLE_SUPER_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Self-promotion / self-role change forbidden. Roles can only be reassigned by another administrator."
+            )
+
+    # Super Admin assignment check
     if req.role and req.role.value == ROLE_SUPER_ADMIN and current_user.get("role") != ROLE_SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="Only Super Admins can promote to Super Admin.")
+
+    # Privilege escalation prevention via custom permissions
+    if req.permissions is not None and current_user.get("role") != ROLE_SUPER_ADMIN:
+        caller_perms = get_user_effective_permissions(current_user)
+        for p in req.permissions:
+            if p not in caller_perms:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Cannot grant permission '{p}' exceeding your administrative privilege scope."
+                )
+        if user_id == current_user["id"]:
+            existing_perms = set(target_user.get("permissions") or [])
+            if any(p not in existing_perms for p in req.permissions):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Self-elevation of permissions forbidden."
+                )
 
     # Prevent self-deactivation
     if user_id == current_user["id"] and req.is_active is False:

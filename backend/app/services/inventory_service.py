@@ -45,10 +45,16 @@ class InventoryService:
         """
         if user_role in ("super_admin", "org_admin", "supply_chain_manager"):
             return
-        if user_warehouse_id and user_warehouse_id != target_warehouse_id:
+        if user_role in ("distributor", "distributor_field_operator"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Unauthorized warehouse operation. User assigned to '{user_warehouse_id}' cannot perform operations on warehouse '{target_warehouse_id}'."
+                detail=f"Role '{user_role}' is not authorized to mutate warehouse inventory."
+            )
+        wh = user_warehouse_id or "wh_chicago_01"
+        if wh != target_warehouse_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Unauthorized warehouse operation. User assigned to '{wh}' cannot perform operations on warehouse '{target_warehouse_id}'."
             )
 
     @staticmethod
@@ -959,12 +965,20 @@ class InventoryService:
                     detail=f"Transfer is already in '{curr_status}' state. Double-approval or re-processing forbidden."
                 )
 
-            # Warehouse managers can only approve transfers originating from their facility
-            if actor_role == "warehouse_manager" and user_warehouse_id:
-                if trf["source_warehouse_id"] != user_warehouse_id:
+            # Reject unauthorized operational roles from approving transfers
+            if actor_role in ("operator", "warehouse_operator", "distributor", "distributor_field_operator"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Role '{actor_role}' is not authorized to approve transfers."
+                )
+
+            # Warehouse managers can only approve transfers involving their facility
+            if actor_role == "warehouse_manager":
+                wh = user_warehouse_id or "wh_chicago_01"
+                if trf.get("source_warehouse_id") != wh and trf.get("target_warehouse_id") != wh:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"Warehouse manager at '{user_warehouse_id}' cannot approve transfers from '{trf['source_warehouse_id']}'."
+                        detail=f"Warehouse manager at '{wh}' cannot approve transfers from '{trf.get('source_warehouse_id')}'. Only assigned warehouse transfers are allowed."
                     )
 
             if approved:

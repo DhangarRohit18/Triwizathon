@@ -9,6 +9,7 @@ from app.core.permissions import (
     validate_warehouse_access,
     get_authorized_warehouses,
     PERM_OPTIMIZATION_APPROVE,
+    PERM_TRANSFERS_APPROVE,
     PERM_INVENTORY_VIEW,
 )
 
@@ -44,12 +45,7 @@ def get_extension_summary(
     assigned_wh_id = warehouse_id or current_user.get("warehouse_id") or "wh_chicago_01"
     
     # Enforce location scoping:
-    if not validate_warehouse_access(current_user, assigned_wh_id):
-        auth_whs = get_authorized_warehouses(current_user)
-        if auth_whs:
-            assigned_wh_id = auth_whs[0]
-        else:
-            raise HTTPException(status_code=403, detail=f"Access denied to warehouse {assigned_wh_id}.")
+    validate_warehouse_access(current_user, assigned_wh_id)
     wh = db.get_document("warehouses", assigned_wh_id)
     all_warehouses = [
         {"id": w["id"], "name": w["name"], "city": w.get("city", "")}
@@ -209,8 +205,30 @@ def extension_approve_transfer(
     current_user: dict = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Allow authorized managers to approve transfers directly from the extension."""
-    if not user_has_permission(current_user, PERM_OPTIMIZATION_APPROVE):
-        raise HTTPException(status_code=403, detail="Permission 'optimization.approve' required for transfer approval.")
+    if not (user_has_permission(current_user, PERM_TRANSFERS_APPROVE) or user_has_permission(current_user, PERM_OPTIMIZATION_APPROVE)):
+        raise HTTPException(status_code=403, detail="Permission 'transfers.approve' required for transfer approval.")
+    
+    t = db.get_document("transfers", transfer_id)
+    if not t or t.get("org_id") != current_user["org_id"]:
+        raise HTTPException(status_code=404, detail="Transfer not found or cross-organization access denied.")
+
+    if current_user.get("role") == "warehouse_manager":
+        allowed = get_authorized_warehouses(current_user) or []
+        if t.get("source_warehouse_id") not in allowed and t.get("target_warehouse_id") not in allowed:
+            raise HTTPException(
+                status_code=403,
+                detail="Warehouse manager cannot approve transfers outside assigned facility."
+            )
+
     from app.services.inventory_service import InventoryService
-    return InventoryService.approve_transfer(transfer_id, current_user["id"], current_user.get("full_name", "Manager"), current_user["org_id"])
+    return InventoryService.approve_or_reject_transfer(
+        transfer_id=transfer_id,
+        approved=True,
+        actor_id=current_user["id"],
+        actor_name=current_user.get("full_name", "Manager"),
+        actor_role=current_user.get("role", "supply_chain_manager"),
+        user_warehouse_id=current_user.get("warehouse_id"),
+        org_id=current_user["org_id"],
+        notes="Approved via Chrome Extension companion"
+    )
 

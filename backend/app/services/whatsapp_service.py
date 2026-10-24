@@ -1726,6 +1726,7 @@ class WhatsAppBotService:
                         InventoryService.approve_or_reject_transfer(
                             transfer_id=trf_id, approved=True,
                             actor_id=matched_user["id"], actor_name=user_name,
+                            actor_role=user_role, user_warehouse_id=matched_user.get("warehouse_id"),
                             org_id=org_id, notes="Approved via authenticated WhatsApp")
                         deep_link = f"https://app.stockpilot.ai/transfers?id={trf_id}"
                         reply = f"Transfer {trf_id} Approved. Status: IN_TRANSIT.\nDetails: {deep_link}"
@@ -1739,22 +1740,27 @@ class WhatsAppBotService:
         # Command: REJECT <TRF_ID>
         # ---------------------------------------------------------------------
         elif cmd_upper.startswith("REJECT"):
-            parts = cmd_upper.split()
-            if len(parts) < 2:
-                reply = "Please specify Transfer ID. Example: REJECT trf_001"
+            if user_role not in cls.MANAGER_ROLES:
+                reply = f"Unauthorized: role '{user_role}' cannot reject transfers."
+                action_taken = "TRANSFER_REJECTION_UNAUTHORIZED"
             else:
-                trf_id = parts[1].strip()
-                try:
-                    InventoryService.approve_or_reject_transfer(
-                        transfer_id=trf_id, approved=False,
-                        actor_id=matched_user["id"], actor_name=user_name,
-                        org_id=org_id, notes="Rejected via WhatsApp")
-                    reply = f"Transfer {trf_id} has been Rejected."
-                    action_taken = "TRANSFER_REJECTED"
-                except HTTPException as e:
-                    reply = f"Error: {e.detail}"
-                except Exception as e:
-                    reply = f"Error rejecting transfer: {str(e)}"
+                parts = cmd_upper.split()
+                if len(parts) < 2:
+                    reply = "Please specify Transfer ID. Example: REJECT trf_001"
+                else:
+                    trf_id = parts[1].strip()
+                    try:
+                        InventoryService.approve_or_reject_transfer(
+                            transfer_id=trf_id, approved=False,
+                            actor_id=matched_user["id"], actor_name=user_name,
+                            actor_role=user_role, user_warehouse_id=matched_user.get("warehouse_id"),
+                            org_id=org_id, notes="Rejected via WhatsApp")
+                        reply = f"Transfer {trf_id} has been Rejected."
+                        action_taken = "TRANSFER_REJECTED"
+                    except HTTPException as e:
+                        reply = f"Error: {e.detail}"
+                    except Exception as e:
+                        reply = f"Error rejecting transfer: {str(e)}"
 
         # ---------------------------------------------------------------------
         # Command: HUMAN (Operations Desk Escalation)

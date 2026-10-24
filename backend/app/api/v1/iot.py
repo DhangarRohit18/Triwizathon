@@ -121,6 +121,8 @@ def ingest_telemetry(
     payload: TelemetryPayload,
     x_device_id: Optional[str] = Header(None, alias="X-Device-ID"),
     x_device_api_key: Optional[str] = Header(None, alias="X-Device-API-Key"),
+    x_iot_key: Optional[str] = Header(None, alias="X-IoT-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     dev_id = x_device_id or payload.device_id
     if not dev_id:
@@ -132,9 +134,10 @@ def ingest_telemetry(
     payload_dict["device_id"] = dev_id
     payload_dict["temperature"] = temp
     payload_dict["temperature_c"] = temp
+    auth_key = x_device_api_key or x_iot_key or x_api_key or ""
     return IoTTelemetryService.ingest_reading(
         payload=payload_dict,
-        auth_api_key=x_device_api_key or "",
+        auth_api_key=auth_key,
         expected_api_key=settings.IOT_API_KEY
     )
 
