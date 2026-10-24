@@ -226,8 +226,14 @@ async function startWhatsAppBridge() {
       if (QRCode) {
         try {
           qrDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 6 });
-        } catch {
-          // ignore
+          const qrPngPath = path.join(AUTH_FOLDER, "whatsapp_qr.png");
+          await QRCode.toFile(qrPngPath, qr, { margin: 2, scale: 8 });
+          const artifactDir = "C:/Users/user/.gemini/antigravity-ide/brain/4d23082c-378a-4fb9-b902-1f4c5ba53c11";
+          if (fs.existsSync(artifactDir)) {
+            await QRCode.toFile(path.join(artifactDir, "whatsapp_qr.png"), qr, { margin: 2, scale: 8 });
+          }
+        } catch (err) {
+          console.error("QRCode file save error:", err.message);
         }
       }
 

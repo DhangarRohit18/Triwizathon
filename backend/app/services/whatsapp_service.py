@@ -1470,7 +1470,7 @@ class WhatsAppBotService:
                 m = re.search(r"(TRF-[A-Z0-9-]+)", clean_text, re.IGNORECASE)
                 trf_id = m.group(1).upper() if m else "TRF-ORD-JFK-101"
                 cmd_upper = f"APPROVE {trf_id}"
-            elif any(w in t_lower for w in ("help", "madat", "sahayata", "menu", "command", "मदत", "सहायता")):
+            elif any(w in t_lower.split() or w in t_lower for w in ("hi", "hello", "hey", "namaste", "pranam", "help", "madat", "sahayata", "menu", "command", "मदत", "सहायता")):
                 cmd_upper = "HELP"
 
         reply = ""
