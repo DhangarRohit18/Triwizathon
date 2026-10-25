@@ -198,6 +198,33 @@
     .btn-primary:hover { background: #0F766E; }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
+    .btn-dashboard {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--teal-light);
+      color: var(--teal);
+      border: 1.5px solid rgba(13, 148, 136, 0.35);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-dashboard:hover {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #FFFFFF;
+      box-shadow: 0 3px 8px rgba(13, 148, 136, 0.25);
+    }
+    .btn-dashboard:active {
+      transform: translateY(1px);
+    }
+
     /* Test Accounts Divider & Grid */
     .dev-accounts-title {
       margin-top: 16px;
@@ -487,6 +514,7 @@
       <div class="brand-title">StockPilot AI</div>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="headerDashboardBtn" title="Open StockPilot Web Dashboard">📊</button>
       <div id="authHeader" style="display: none;">
         <div class="user-pill">
           <span id="headerUserName">User</span>
@@ -540,6 +568,23 @@
           Authenticate Session
         </button>
       </form>
+
+      <!-- Quick Web Dashboard Launch -->
+      <div class="dashboard-shortcut-wrap" style="margin-top: 14px; text-align: center;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+          <span style="font-size: 10px; color: var(--slate-500); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">OR</span>
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        </div>
+        <button type="button" class="btn-dashboard" id="authOpenDashboardBtn">
+          <span style="font-size: 14px;">📊</span>
+          <span>Open Web Dashboard</span>
+          <span style="font-size: 11px; opacity: 0.85;">↗</span>
+        </button>
+        <div style="font-size: 10px; color: var(--slate-500); margin-top: 8px;">
+          Directly launch full StockPilot AI web console in a new browser tab
+        </div>
+      </div>
     </div>
   </div>
 
@@ -603,12 +648,12 @@
 
     <!-- Deep Link Footer -->
     <footer>
-      <a href="#" target="_blank" class="footer-btn" id="openWebConsoleBtn">
-        Open Web Console ↗
-      </a>
-      <a href="#" target="_blank" class="footer-btn" id="openExpressLaneBtn">
+      <button type="button" class="footer-btn" id="openWebConsoleBtn">
+        Open Web Dashboard ↗
+      </button>
+      <button type="button" class="footer-btn" id="openExpressLaneBtn">
         Express Lane SOS ⚡
-      </a>
+      </button>
     </footer>
   </div>
 

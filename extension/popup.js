@@ -68,6 +68,8 @@ const loginForm = document.getElementById("loginForm");
 const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const loginBtn = document.getElementById("loginBtn");
+const authOpenDashboardBtn = document.getElementById("authOpenDashboardBtn");
+const headerDashboardBtn = document.getElementById("headerDashboardBtn");
 
 // Dashboard Elements
 const warehouseSelect = document.getElementById("warehouseSelect");
@@ -89,6 +91,10 @@ const modalTitle = document.getElementById("modalTitle");
 const modalBody = document.getElementById("modalBody");
 const modalCancelBtn = document.getElementById("modalCancelBtn");
 const modalConfirmBtn = document.getElementById("modalConfirmBtn");
+
+// Deep Link Footer Elements
+const openWebConsoleBtn = document.getElementById("openWebConsoleBtn");
+const openExpressLaneBtn = document.getElementById("openExpressLaneBtn");
 
 // ---------------------------------------------------------------------------
 // Helpers: Banners, Health, Escaping, Deep Links
@@ -124,11 +130,23 @@ function setOnline(isOnline) {
   }
 }
 
+// Reliable URL opener for Chrome Extension (MV3 tabs API or window.open fallback)
+function openExternalUrl(url) {
+  try {
+    if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  } catch (err) {
+    console.error("Failed to open external URL:", err);
+    window.open(url, "_blank");
+  }
+}
+
 function updateFooterLinks() {
-  const openWebConsoleBtn = document.getElementById("openWebConsoleBtn");
-  const openExpressLaneBtn = document.getElementById("openExpressLaneBtn");
-  if (openWebConsoleBtn) openWebConsoleBtn.href = `${webBase}/`;
-  if (openExpressLaneBtn) openExpressLaneBtn.href = `${webBase}/express`;
+  if (openWebConsoleBtn && openWebConsoleBtn.tagName === "A") openWebConsoleBtn.href = `${webBase}/`;
+  if (openExpressLaneBtn && openExpressLaneBtn.tagName === "A") openExpressLaneBtn.href = `${webBase}/express`;
 }
 
 // Authenticated API Fetch
@@ -854,6 +872,28 @@ warehouseSelect.onchange = () => {
   activeWarehouseId = warehouseSelect.value;
   loadSummary();
 };
+
+if (authOpenDashboardBtn) {
+  authOpenDashboardBtn.onclick = () => openExternalUrl(`${webBase}/`);
+}
+
+if (headerDashboardBtn) {
+  headerDashboardBtn.onclick = () => openExternalUrl(`${webBase}/`);
+}
+
+if (openWebConsoleBtn) {
+  openWebConsoleBtn.onclick = (e) => {
+    e.preventDefault();
+    openExternalUrl(`${webBase}/`);
+  };
+}
+
+if (openExpressLaneBtn) {
+  openExpressLaneBtn.onclick = (e) => {
+    e.preventDefault();
+    openExternalUrl(`${webBase}/express`);
+  };
+}
 
 configToggleBtn.onclick = () => {
   configView.style.display = configView.style.display === "none" ? "block" : "none";
