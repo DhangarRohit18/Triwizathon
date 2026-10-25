@@ -82,11 +82,74 @@ const contextDetectedIdentifier = document.getElementById("contextDetectedIdenti
 const contextInspectBtn = document.getElementById("contextInspectBtn");
 const contextDismissBtn = document.getElementById("contextDismissBtn");
 
-// Auth Form
-const loginForm = document.getElementById("loginForm");
-const loginEmail = document.getElementById("loginEmail");
-const loginPassword = document.getElementById("loginPassword");
-const loginBtn = document.getElementById("loginBtn");
+// RBAC Role Gateways & Switcher Elements
+const rbacRolesList = document.getElementById("rbacRolesList");
+const switchRoleHeaderBtn = document.getElementById("switchRoleHeaderBtn");
+const userPillBtn = document.getElementById("userPillBtn");
+const switchRoleFooterBtn = document.getElementById("switchRoleFooterBtn");
+
+const RBAC_ROLES = [
+  {
+    key: "operator",
+    title: "Warehouse Operator",
+    persona: "James O'Connor",
+    scope: "Central Hub Chicago (wh_chicago_01)",
+    levelBadge: "LEVEL 5 — INTAKE & SCANNING",
+    icon: "📦",
+    webRoute: "/inventory",
+    caps: ["Inbound Receipts", "Floor Tasks", "FEFO Cycle Counts", "Quarantine Audits"]
+  },
+  {
+    key: "warehouse_manager",
+    title: "Warehouse Manager",
+    persona: "David Sterling",
+    scope: "Central Hub Chicago (wh_chicago_01)",
+    levelBadge: "LEVEL 3 — COLD-CHAIN & FEFO",
+    icon: "🏢",
+    webRoute: "/iot",
+    caps: ["Cold-Chain Probes (4.2°C)", "FEFO Expiry Radar", "Facility Transfers", "Quarantine Bay"]
+  },
+  {
+    key: "supply_chain_manager",
+    title: "Supply Chain Manager",
+    persona: "Elena Rostova",
+    scope: "Multi-Hub Enterprise Network",
+    levelBadge: "LEVEL 2 — MIP SOLVER",
+    icon: "⚡",
+    webRoute: "/optimizer",
+    caps: ["OR-Tools MIP Solver", "14-Day Demand Velocity", "Inter-Facility Transfer Approvals"]
+  },
+  {
+    key: "org_admin",
+    title: "Organization Admin",
+    persona: "Marcus Vance",
+    scope: "Enterprise Network Director",
+    levelBadge: "LEVEL 1 — ORG DIRECTOR",
+    icon: "🏛️",
+    webRoute: "/",
+    caps: ["Topography Matrix", "Safety Stock Buffers", "Disruption Simulator", "Executive KPIs"]
+  },
+  {
+    key: "super_admin",
+    title: "Super Admin",
+    persona: "Sarah Chen",
+    scope: "Global Platform Infrastructure",
+    levelBadge: "LEVEL 0 — ROOT SYSTEM",
+    icon: "🌐",
+    webRoute: "/",
+    caps: ["Cloud Topography", "Security Kill Switch", "Cryptographic Ledger", "Diagnostics"]
+  },
+  {
+    key: "distributor",
+    title: "Distributor & Fleet",
+    persona: "Rajiv Patel",
+    scope: "Fleet Logistics & Dispatch",
+    levelBadge: "LEVEL 4 — FLEET & DISPATCH",
+    icon: "🚚",
+    webRoute: "/inventory",
+    caps: ["Outbound Vehicle Manifests", "Cold-Chain Waybills", "Digital POD Signatures"]
+  }
+];
 
 // Dashboard Elements
 const warehouseSelect = document.getElementById("warehouseSelect");
@@ -270,6 +333,7 @@ function showAuthView() {
   if (syncStatusBar) syncStatusBar.style.display = "none";
   if (logoutBtn) logoutBtn.style.display = "none";
   if (contextDetectedBar) contextDetectedBar.style.display = "none";
+  renderRbacGateways();
 }
 
 function showDashboardView() {
@@ -1169,33 +1233,111 @@ modalConfirmBtn.onclick = () => {
 };
 
 // ---------------------------------------------------------------------------
-// Event Handlers
+// RBAC Role Gateways & Quick Role Switcher
 // ---------------------------------------------------------------------------
-loginForm.onsubmit = async (e) => {
-  e.preventDefault();
+function renderRbacGateways() {
+  if (!rbacRolesList) return;
+  rbacRolesList.innerHTML = "";
+
+  RBAC_ROLES.forEach(r => {
+    const card = document.createElement("div");
+    card.className = "rbac-role-card";
+
+    // Top Row
+    const topRow = document.createElement("div");
+    topRow.className = "rbac-card-top";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "rbac-card-title-wrap";
+
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "rbac-role-icon";
+    iconSpan.textContent = r.icon;
+
+    const titlesCol = document.createElement("div");
+    const roleTitle = document.createElement("div");
+    roleTitle.className = "rbac-role-title";
+    roleTitle.textContent = r.title;
+
+    const persona = document.createElement("div");
+    persona.className = "rbac-persona-name";
+    persona.textContent = `${r.persona} • ${r.scope}`;
+
+    titlesCol.appendChild(roleTitle);
+    titlesCol.appendChild(persona);
+    titleWrap.appendChild(iconSpan);
+    titleWrap.appendChild(titlesCol);
+
+    const levelBadge = document.createElement("span");
+    levelBadge.className = "rbac-level-badge";
+    levelBadge.textContent = r.levelBadge;
+
+    topRow.appendChild(titleWrap);
+    topRow.appendChild(levelBadge);
+
+    // Capabilities Row
+    const capsRow = document.createElement("div");
+    capsRow.className = "rbac-caps-row";
+    r.caps.forEach(cap => {
+      const tag = document.createElement("span");
+      tag.className = "rbac-cap-tag";
+      tag.textContent = cap;
+      capsRow.appendChild(tag);
+    });
+
+    // Actions Row (Companion + Web Console)
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "rbac-actions-row";
+
+    const launchBtn = document.createElement("button");
+    launchBtn.type = "button";
+    launchBtn.className = "btn-launch-companion";
+    launchBtn.textContent = `🚀 Launch ${r.title.split(" ")[0]} Companion`;
+    launchBtn.onclick = () => selectRbacRole(r.key);
+
+    const webBtn = document.createElement("button");
+    webBtn.type = "button";
+    webBtn.className = "btn-open-web";
+    webBtn.textContent = "Web ↗";
+    webBtn.title = `Open ${r.title} Web Console`;
+    webBtn.onclick = (e) => {
+      e.stopPropagation();
+      openExternalUrl(`${webBase}${r.webRoute}`);
+    };
+
+    actionsRow.appendChild(launchBtn);
+    actionsRow.appendChild(webBtn);
+
+    card.appendChild(topRow);
+    card.appendChild(capsRow);
+    card.appendChild(actionsRow);
+    rbacRolesList.appendChild(card);
+  });
+
+  // Wire direct web console shortcut buttons
+  document.querySelectorAll(".shortcut-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      const path = btn.getAttribute("data-url") || "/";
+      openExternalUrl(`${webBase}${path}`);
+    };
+  });
+}
+
+async function selectRbacRole(roleKey) {
   clearBanner();
-
-  const email = (loginEmail.value || "").trim().toLowerCase();
-  const password = loginPassword.value || "";
-
-  if (!email || !password) {
-    showBanner("Please enter both email and password.", "warning");
-    return;
-  }
-
-  loginBtn.disabled = true;
-  loginBtn.textContent = "Authenticating...";
+  showBanner(`Activating ${roleKey.replace(/_/g, " ").toUpperCase()} session...`, "info");
 
   try {
-    const res = await fetch(`${apiBase}/auth/login`, {
+    const res = await fetch(`${apiBase}/auth/demo/switch-role`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ role: roleKey })
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || "Authentication failed. Invalid email or password.");
+      throw new Error(err.detail || `Role activation failed with status ${res.status}`);
     }
 
     const data = await res.json();
@@ -1203,16 +1345,21 @@ loginForm.onsubmit = async (e) => {
     await Storage.set("stockpilot_token", currentToken);
 
     currentUser = await apiFetch("/extension/me");
+    clearBanner();
     showDashboardView();
   } catch (err) {
-    showBanner(err.message, "error");
-  } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = "Authenticate Session";
+    showBanner(`Authentication failed: ${err.message}`, "error");
   }
-};
+}
 
-logoutBtn.onclick = () => handleLogout();
+// ---------------------------------------------------------------------------
+// Event Handlers
+// ---------------------------------------------------------------------------
+logoutBtn.onclick = () => showAuthView();
+if (switchRoleHeaderBtn) switchRoleHeaderBtn.onclick = () => showAuthView();
+if (userPillBtn) userPillBtn.onclick = () => showAuthView();
+if (switchRoleFooterBtn) switchRoleFooterBtn.onclick = () => showAuthView();
+
 refreshBtn.onclick = () => loadSummary();
 warehouseSelect.onchange = () => {
   activeWarehouseId = warehouseSelect.value;

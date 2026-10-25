@@ -193,65 +193,179 @@
       flex-direction: column;
     }
 
-    /* Auth Card */
-    .auth-card {
-      background: var(--bg-white);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    /* RBAC Gateway Selector */
+    .rbac-header-card {
+      margin-bottom: 10px;
     }
-    .auth-title {
+    .rbac-title {
       font-size: 15px;
-      font-weight: 700;
+      font-weight: 800;
       color: var(--navy);
-      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-    .auth-subtitle {
+    .rbac-subtitle {
       font-size: 11px;
       color: var(--slate-500);
-      margin-bottom: 16px;
-      line-height: 1.4;
+      margin-top: 2px;
+      line-height: 1.35;
     }
-    .form-group {
-      margin-bottom: 12px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--slate-700);
-      margin-bottom: 4px;
-    }
-    .form-control {
-      width: 100%;
-      padding: 8px 10px;
+    .web-shortcuts-bar {
+      background: var(--bg-light);
       border: 1px solid var(--border);
       border-radius: 6px;
-      font-size: 12px;
-      color: var(--navy);
-      background: var(--bg-light);
-      outline: none;
-      transition: border-color 0.2s, background 0.2s;
+      padding: 8px 10px;
+      margin-bottom: 12px;
     }
-    .form-control:focus {
-      border-color: var(--teal);
+    .shortcuts-label {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: var(--slate-500);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .shortcuts-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .shortcut-btn {
       background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--navy);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
-    .btn-primary {
-      width: 100%;
-      padding: 9px;
+    .shortcut-btn:hover {
+      background: var(--teal-light);
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+    .rbac-roles-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .rbac-role-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .rbac-role-card:hover {
+      border-color: var(--teal);
+      box-shadow: 0 4px 10px rgba(13, 148, 136, 0.12);
+      transform: translateY(-1px);
+    }
+    .rbac-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .rbac-card-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .rbac-role-icon {
+      font-size: 16px;
+      line-height: 1;
+    }
+    .rbac-role-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+    .rbac-persona-name {
+      font-size: 10px;
+      color: var(--slate-500);
+      font-weight: 500;
+    }
+    .rbac-level-badge {
+      font-size: 8.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #F1F5F9;
+      color: var(--slate-700);
+      border: 1px solid #CBD5E1;
+      white-space: nowrap;
+    }
+    .rbac-caps-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 2px 0 4px;
+    }
+    .rbac-cap-tag {
+      font-size: 9.5px;
+      background: var(--bg-light);
+      border: 1px solid #E2E8F0;
+      color: var(--slate-700);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .rbac-actions-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .btn-launch-companion {
+      flex: 2;
       background: var(--teal);
       color: #FFFFFF;
       border: none;
-      border-radius: 6px;
-      font-size: 12px;
+      border-radius: 5px;
+      padding: 6px 10px;
+      font-size: 11px;
       font-weight: 700;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
       transition: background 0.2s;
     }
-    .btn-primary:hover { background: var(--teal-hover); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-launch-companion:hover {
+      background: var(--teal-hover);
+    }
+    .btn-open-web {
+      flex: 1;
+      background: var(--bg-light);
+      color: var(--navy);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 6px 8px;
+      font-size: 10.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .btn-open-web:hover {
+      background: #FFFFFF;
+      border-color: var(--slate-400);
+      color: var(--teal);
+    }
 
     /* Configuration Panel */
     #configView {
@@ -572,13 +686,15 @@
     <div class="header-actions">
       <button class="icon-btn" id="headerDashboardBtn" title="Launch StockPilot Web Console">📊</button>
       <div id="authHeader" style="display: none;">
-        <div class="user-pill">
+        <div class="user-pill" id="userPillBtn" title="Click to Switch Role (RBAC)" style="cursor: pointer;">
           <span id="headerUserName">User</span>
           <span class="role-badge" id="headerUserRole">OPERATOR</span>
+          <span style="font-size: 9px; opacity: 0.8; margin-left: 2px;">⇄</span>
         </div>
       </div>
+      <button class="icon-btn" id="switchRoleHeaderBtn" title="RBAC Role Dashboards">🔀</button>
       <button class="icon-btn" id="configToggleBtn" title="Host Configuration">⚙</button>
-      <button class="icon-btn" id="logoutBtn" style="display: none;" title="Sign Out">✕</button>
+      <button class="icon-btn" id="logoutBtn" style="display: none;" title="Switch Role">✕</button>
     </div>
   </header>
 
@@ -622,25 +738,32 @@
     </div>
   </div>
 
-  <!-- 1. SIGN-IN VIEW -->
+  <!-- 1. RBAC DASHBOARDS LAUNCHPAD (No manual passwords required) -->
   <div class="view-container" id="authView">
-    <div class="auth-card">
-      <div class="auth-title">Logistics Gateway Login</div>
-      <div class="auth-subtitle">Sign in with authorized organization credentials to access companion controls.</div>
-      
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" id="loginEmail" class="form-control" placeholder="e.g. operator@stockpilot.ai" required autocomplete="username" />
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="loginPassword" class="form-control" placeholder="Enter password" required autocomplete="current-password" />
-        </div>
-        <button type="submit" class="btn-primary" id="loginBtn">
-          Authenticate Session
-        </button>
-      </form>
+    <div class="rbac-header-card">
+      <div class="rbac-title">
+        <span>🛡️</span>
+        <span>RBAC Role Dashboards</span>
+      </div>
+      <div class="rbac-subtitle">Select an enterprise operational role to instantly launch its companion dashboard or open the authoritative web console:</div>
+    </div>
+
+    <!-- Direct Web Dashboard Shortcuts -->
+    <div class="web-shortcuts-bar">
+      <div class="shortcuts-label">Web Console Dashboards:</div>
+      <div class="shortcuts-grid">
+        <button type="button" class="shortcut-btn" data-url="/">📊 Main Console</button>
+        <button type="button" class="shortcut-btn" data-url="/inventory">📦 Inventory</button>
+        <button type="button" class="shortcut-btn" data-url="/optimizer">🧠 Optimizer</button>
+        <button type="button" class="shortcut-btn" data-url="/iot">🌡️ Cold-Chain</button>
+        <button type="button" class="shortcut-btn" data-url="/express">⚡ Express Lane</button>
+        <button type="button" class="shortcut-btn" data-url="/whatsapp">💬 WhatsApp</button>
+      </div>
+    </div>
+
+    <!-- 6 RBAC Role Cards -->
+    <div class="rbac-roles-list" id="rbacRolesList">
+      <!-- Injected via safe DOM rendering in popup.js -->
     </div>
   </div>
 
@@ -698,6 +821,9 @@
       </button>
       <button type="button" class="footer-btn" id="openExpressLaneBtn">
         Express SOS ⚡
+      </button>
+      <button type="button" class="footer-btn" id="switchRoleFooterBtn">
+        Switch Role (RBAC) ⇄
       </button>
     </footer>
   </div>
