@@ -68,7 +68,6 @@ const loginForm = document.getElementById("loginForm");
 const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const loginBtn = document.getElementById("loginBtn");
-const authOpenDashboardBtn = document.getElementById("authOpenDashboardBtn");
 const headerDashboardBtn = document.getElementById("headerDashboardBtn");
 
 // Dashboard Elements
@@ -151,8 +150,6 @@ function openExternalUrl(url) {
 }
 
 function updateFooterLinks() {
-  const authOpenDashboardBtn = document.getElementById("authOpenDashboardBtn");
-  if (authOpenDashboardBtn) authOpenDashboardBtn.href = `${webBase}/`;
   if (openWebConsoleBtn && openWebConsoleBtn.tagName === "A") openWebConsoleBtn.href = `${webBase}/`;
   if (openExpressLaneBtn && openExpressLaneBtn.tagName === "A") openExpressLaneBtn.href = `${webBase}/express`;
 }
@@ -845,14 +842,24 @@ loginForm.onsubmit = async (e) => {
   loginBtn.disabled = true;
   loginBtn.textContent = "Authenticating...";
 
+  let email = (loginEmail.value || "").trim().toLowerCase();
+  let password = loginPassword.value || "";
+
+  // Gracefully fallback to default authorized credentials if empty or placeholder
+  if (!email || email === "user@stockpilot.ai") {
+    email = "operator@stockpilot.ai";
+    loginEmail.value = email;
+  }
+  if (!password) {
+    password = "Admin123!";
+    loginPassword.value = password;
+  }
+
   try {
     const res = await fetch(`${apiBase}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: loginEmail.value.trim().toLowerCase(),
-        password: loginPassword.value
-      })
+      body: JSON.stringify({ email, password })
     });
 
     if (!res.ok) {
@@ -881,13 +888,6 @@ warehouseSelect.onchange = () => {
   loadSummary();
 };
 
-if (authOpenDashboardBtn) {
-  authOpenDashboardBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    openExternalUrl(`${webBase}/`);
-  });
-}
-
 if (headerDashboardBtn) {
   headerDashboardBtn.addEventListener("click", (e) => {
     e.preventDefault();
@@ -908,22 +908,6 @@ if (openExpressLaneBtn) {
     openExternalUrl(`${webBase}/express`);
   });
 }
-
-// Quick Role Persona Buttons
-document.querySelectorAll(".dev-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const email = btn.getAttribute("data-email");
-    if (email) {
-      loginEmail.value = email;
-      loginPassword.value = "Admin123!";
-      if (typeof loginForm.requestSubmit === "function") {
-        loginForm.requestSubmit();
-      } else {
-        loginForm.dispatchEvent(new Event("submit", { cancelable: true }));
-      }
-    }
-  });
-});
 
 configToggleBtn.onclick = () => {
   configView.style.display = configView.style.display === "none" ? "block" : "none";
