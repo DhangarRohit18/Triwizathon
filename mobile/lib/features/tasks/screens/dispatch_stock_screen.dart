@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../data/models/inventory_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../inventory/providers/inventory_provider.dart';
@@ -38,8 +37,16 @@ class _DispatchStockScreenState extends ConsumerState<DispatchStockScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final user = ref.read(authNotifierProvider).user;
-    final warehouseId = _selectedWarehouseId ?? user?.warehouseId ?? 'wh_chicago_01';
-    final productId = _selectedProductId ?? 'prd_vax_01';
+    final warehouseId = _selectedWarehouseId ?? user?.warehouseId;
+    if (warehouseId == null || warehouseId.isEmpty) {
+      setState(() => _errorMessage = 'A valid warehouse facility must be assigned or selected before dispatching stock.');
+      return;
+    }
+    final productId = _selectedProductId;
+    if (productId == null || productId.isEmpty) {
+      setState(() => _errorMessage = 'Please select an available product SKU to dispatch.');
+      return;
+    }
     final batch = _selectedBatchNumber;
     final qty = int.tryParse(_quantityController.text) ?? 0;
     final idempotencyKey = const Uuid().v4();
@@ -146,8 +153,9 @@ class _DispatchStockScreenState extends ConsumerState<DispatchStockScreen> {
     final inventoryAsync = ref.watch(inventoryListProvider);
     final batchesAsync = ref.watch(batchesListProvider);
     final user = ref.watch(authNotifierProvider).user;
-    final isRestrictedWarehouse = user?.role == UserRole.operator || user?.role == UserRole.warehouseManager;
-    final assignedWh = user?.warehouseId ?? 'wh_chicago_01';
+    final assignedWh = user?.warehouseId ?? '';
+    final hasAssignedWarehouse = assignedWh.isNotEmpty;
+    final isRestrictedWarehouse = (user?.role == UserRole.operator || user?.role == UserRole.warehouseManager) && hasAssignedWarehouse;
 
     return Scaffold(
       backgroundColor: AppColors.pureWhite,
@@ -242,18 +250,65 @@ class _DispatchStockScreenState extends ConsumerState<DispatchStockScreen> {
                   ),
                 )
               else
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedWarehouseId ?? assignedWh,
-                  decoration: const InputDecoration(border: OutlineInputBorder()),
-                  items: const [
-                    DropdownMenuItem(value: 'wh_chicago_01', child: Text('Central Hub Chicago (wh_chicago_01)')),
-                    DropdownMenuItem(value: 'wh_ny_02', child: Text('New York BioLogistics (wh_ny_02)')),
-                    DropdownMenuItem(value: 'wh_dallas_02', child: Text('Dallas Cold Storage (wh_dallas_02)')),
-                    DropdownMenuItem(value: 'wh_boston_01', child: Text('Boston Distribution Hub (wh_boston_01)')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedWarehouseId = val);
+                inventoryAsync.when(
+                  data: (items) {
+                    final Set<String> authorizedWarehouses = {};
+                    if (user?.warehouseId != null && user!.warehouseId!.isNotEmpty) {
+                      authorizedWarehouses.add(user.warehouseId!);
+                    }
+                    if (user?.warehouseIds != null) {
+                      authorizedWarehouses.addAll(user!.warehouseIds);
+                    }
+                    for (final i in items) {
+                      if (i.warehouseId.isNotEmpty) {
+                        authorizedWarehouses.add(i.warehouseId);
+                      }
+                    }
+
+                    if (authorizedWarehouses.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.borderLight),
+                        ),
+                        child: const Text('No authorized facilities provisioned for this identity.', style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                      );
+                    }
+
+                    final initialWh = _selectedWarehouseId ?? (authorizedWarehouses.contains(user?.warehouseId) ? user?.warehouseId : authorizedWarehouses.first);
+                    if (_selectedWarehouseId == null && initialWh != null) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted && _selectedWarehouseId == null) {
+                          setState(() => _selectedWarehouseId = initialWh);
+                        }
+                      });
+                    }
+
+                    return DropdownButtonFormField<String>(
+                      initialValue: authorizedWarehouses.contains(initialWh) ? initialWh : authorizedWarehouses.first,
+                      decoration: const InputDecoration(border: OutlineInputBorder()),
+                      items: authorizedWarehouses.map((wh) {
+                        return DropdownMenuItem(
+                          value: wh,
+                          child: Text('Facility ($wh)'),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _selectedWarehouseId = val);
+                      },
+                    );
                   },
+                  loading: () => const LinearProgressIndicator(color: AppColors.tealAccent),
+                  error: (_, __) => TextFormField(
+                    initialValue: _selectedWarehouseId ?? user?.warehouseId ?? '',
+                    decoration: const InputDecoration(
+                      labelText: 'Facility Code (e.g. WH-FACILITY-01)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (val) => setState(() => _selectedWarehouseId = val.trim()),
+                  ),
                 ),
               const SizedBox(height: 16),
 
@@ -265,33 +320,42 @@ class _DispatchStockScreenState extends ConsumerState<DispatchStockScreen> {
               const SizedBox(height: 6),
               inventoryAsync.when(
                 data: (items) {
-                  final activeItems = items.isNotEmpty
-                      ? items
-                      : [
-                          InventoryItemModel(
-                            id: 'prd_vax_01',
-                            productId: 'prd_vax_01',
-                            productName: 'PneuVax mRNA-1273',
-                            productSku: 'PRD-VAX-01',
-                            handling: 'COLD_CHAIN',
-                            unit: 'vials',
-                            warehouseId: assignedWh,
-                            warehouseName: 'Central Hub',
-                            totalQuantity: 1000,
-                            availableQuantity: 850,
-                            reservedQuantity: 150,
-                            damagedQuantity: 0,
-                            safetyStock: 100,
-                            reorderPoint: 200,
+                  if (items.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.borderLight),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.inventory_2_outlined, color: AppColors.textSecondaryLight, size: 18),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'No products currently registered in this facility ledger.',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                            ),
                           ),
-                        ];
+                        ],
+                      ),
+                    );
+                  }
 
-                  final currentVal = _selectedProductId ?? activeItems.first.productId;
+                  final currentVal = _selectedProductId ?? items.first.productId;
+                  if (_selectedProductId == null) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted && _selectedProductId == null) {
+                        setState(() => _selectedProductId = items.first.productId);
+                      }
+                    });
+                  }
 
                   return DropdownButtonFormField<String>(
-                    initialValue: activeItems.any((i) => i.productId == currentVal) ? currentVal : activeItems.first.productId,
+                    initialValue: items.any((i) => i.productId == currentVal) ? currentVal : items.first.productId,
                     decoration: const InputDecoration(border: OutlineInputBorder()),
-                    items: activeItems.map((i) {
+                    items: items.map((i) {
                       return DropdownMenuItem(
                         value: i.productId,
                         child: Text('${i.productName} (${i.quantityAvailable} avail)', overflow: TextOverflow.ellipsis),
@@ -308,16 +372,14 @@ class _DispatchStockScreenState extends ConsumerState<DispatchStockScreen> {
                   );
                 },
                 loading: () => const LinearProgressIndicator(color: AppColors.tealAccent),
-                error: (_, __) => DropdownButtonFormField<String>(
-                  initialValue: _selectedProductId ?? 'prd_vax_01',
-                  items: const [
-                    DropdownMenuItem(value: 'prd_vax_01', child: Text('PneuVax mRNA-1273 (850 avail)')),
-                    DropdownMenuItem(value: 'prd_ins_02', child: Text('Insulin Glargine (1,200 avail)')),
-                    DropdownMenuItem(value: 'prd_adr_03', child: Text('Adrenaline Auto-Injector (400 avail)')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedProductId = val);
-                  },
+                error: (e, _) => Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3)),
+                  ),
+                  child: Text('Unable to load verified catalog: $e', style: const TextStyle(fontSize: 12, color: AppColors.errorRed)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -330,8 +392,8 @@ class _DispatchStockScreenState extends ConsumerState<DispatchStockScreen> {
               const SizedBox(height: 6),
               batchesAsync.when(
                 data: (batches) {
-                  final prodId = _selectedProductId ?? 'prd_vax_01';
-                  final matching = batches.where((b) => b.productId == prodId).toList();
+                  final prodId = _selectedProductId;
+                  final matching = prodId != null ? batches.where((b) => b.productId == prodId).toList() : batches;
                   final displayBatches = matching.isNotEmpty ? matching : batches;
 
                   if (displayBatches.isEmpty) {

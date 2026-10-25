@@ -22,10 +22,14 @@ class AuthRepository {
       return null;
     }
 
-    final id = prefs.getString('stockpilot_user_id') ?? 'usr_authenticated';
-    final email = prefs.getString('stockpilot_user_email') ?? '';
+    final id = prefs.getString('stockpilot_user_id');
+    final email = prefs.getString('stockpilot_user_email');
+    if (id == null || id.isEmpty || email == null || email.isEmpty) {
+      return null;
+    }
+
     final fullName = prefs.getString('stockpilot_user_fullname') ?? '';
-    final orgId = prefs.getString('stockpilot_user_org_id') ?? ApiConfig.defaultOrgId;
+    final orgId = prefs.getString('stockpilot_user_org_id') ?? '';
     final whId = prefs.getString(ApiConfig.keyWarehouseId);
     final whName = prefs.getString('stockpilot_user_wh_name');
     final perms = prefs.getStringList('stockpilot_user_permissions') ?? const [];

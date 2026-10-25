@@ -158,8 +158,15 @@ class UserModel {
 
   bool get canAccessTasks => role != UserRole.distributor;
 
+  bool get hasNetworkWideScope =>
+      role == UserRole.superAdmin ||
+      role == UserRole.orgAdmin ||
+      role == UserRole.supplyChainManager;
+
+  bool get isExecutiveOrAdmin => hasNetworkWideScope;
+
   bool canAccessWarehouse(String? whId) {
-    if (role == UserRole.superAdmin || role == UserRole.orgAdmin || role == UserRole.supplyChainManager) {
+    if (hasNetworkWideScope) {
       return true;
     }
     if (whId == null || whId.isEmpty) return false;

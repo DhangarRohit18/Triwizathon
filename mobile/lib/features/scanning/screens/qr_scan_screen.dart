@@ -89,26 +89,26 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        title: const Text('Manual Lookup / Emulator Presets'),
+        title: const Text('Manual Barcode / QR Identifier Lookup'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter a barcode/QR string or choose a demo preset for evaluation:',
+              'Enter a product SKU, lot barcode, or transfer identifier to resolve against the backend registry:',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: textController,
               decoration: const InputDecoration(
-                hintText: 'e.g. BATCH-COV-8821',
+                hintText: 'e.g. PRD-VAX-01 or BATCH-COV-8821',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 14),
             const Text(
-              'DEMO PRESETS:',
+              'SAMPLE IDENTIFIERS (TEST EXAMPLES):',
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.tealAccent),
             ),
             const SizedBox(height: 6),
@@ -186,6 +186,48 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
           MobileScanner(
             controller: _controller,
             onDetect: _onDetect,
+            errorBuilder: (context, error, child) {
+              return Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryNavy,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.2)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.camera_alt_outlined, size: 48, color: AppColors.warningAmber),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Camera Unavailable',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        error.errorCode == MobileScannerErrorCode.permissionDenied
+                            ? 'Camera permission was denied. Please grant permission or use manual barcode entry.'
+                            : 'Camera hardware initialization failed (${error.errorDetails?.message ?? error.errorCode.name}).',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.tealAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _showManualEntryDialog,
+                        icon: const Icon(Icons.keyboard, size: 16),
+                        label: const Text('Manual Identifier Entry'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           // Custom Viewfinder Target Brackets

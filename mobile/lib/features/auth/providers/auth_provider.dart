@@ -33,25 +33,28 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repo;
 
-  AuthNotifier(this._repo) : super(const AuthState(isLoading: true)) {
+  AuthNotifier(this._repo)
+      : super(AuthState(
+          user: _repo.getCachedUser(),
+          isLoading: _repo.getCachedUser() != null,
+        )) {
     _checkInitialAuth();
   }
 
   Future<void> _checkInitialAuth() async {
-    final cached = _repo.getCachedUser();
+    final cached = state.user;
     if (cached != null) {
-      state = AuthState(user: cached);
-      // Validate session against live backend
+      // Validate session against live backend /auth/me
       final verified = await _repo.validateSession();
       if (verified != null) {
-        state = AuthState(user: verified);
+        state = AuthState(user: verified, isLoading: false);
       } else {
         // Session invalid or expired on server
-        state = const AuthState(user: null);
+        state = const AuthState(user: null, isLoading: false);
       }
     } else {
       // Require real user authentication - never fabricate an operator
-      state = const AuthState(user: null);
+      state = const AuthState(user: null, isLoading: false);
     }
   }
 
@@ -59,16 +62,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState(isLoading: true);
     try {
       final user = await _repo.login(email: email, password: password);
-      state = AuthState(user: user);
+      state = AuthState(user: user, isLoading: false);
     } catch (e) {
-      state = AuthState(error: e.toString());
+      state = AuthState(error: e.toString(), isLoading: false);
       rethrow;
     }
   }
 
   Future<void> signOut() async {
     await _repo.logout();
-    state = const AuthState(user: null);
+    state = const AuthState(user: null, isLoading: false);
   }
 }
 

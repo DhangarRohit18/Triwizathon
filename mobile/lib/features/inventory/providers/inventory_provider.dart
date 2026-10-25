@@ -19,14 +19,34 @@ final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {
 final inventoryListProvider = FutureProvider<List<InventoryItemModel>>((ref) async {
   final repo = ref.watch(inventoryRepositoryProvider);
   final auth = ref.watch(authStateProvider).value;
-  final whId = auth?.warehouseId ?? 'wh_chicago_01';
+  if (auth == null) return const [];
+
+  // Executive & SCM roles have authorized network-wide / cross-hub visibility
+  if (auth.hasNetworkWideScope) {
+    return repo.getInventory(warehouseId: null);
+  }
+
+  // Facility-scoped roles (Warehouse Manager, Operator, Distributor)
+  final whId = auth.warehouseId;
+  if (whId == null || whId.isEmpty) {
+    return const []; // Explicit empty state for unassigned facility
+  }
   return repo.getInventory(warehouseId: whId);
 });
 
 final batchesListProvider = FutureProvider<List<InventoryBatchModel>>((ref) async {
   final repo = ref.watch(inventoryRepositoryProvider);
   final auth = ref.watch(authStateProvider).value;
-  final whId = auth?.warehouseId ?? 'wh_chicago_01';
+  if (auth == null) return const [];
+
+  if (auth.hasNetworkWideScope) {
+    return repo.getBatches(warehouseId: null);
+  }
+
+  final whId = auth.warehouseId;
+  if (whId == null || whId.isEmpty) {
+    return const [];
+  }
   return repo.getBatches(warehouseId: whId);
 });
 

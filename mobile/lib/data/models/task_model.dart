@@ -73,7 +73,7 @@ class WarehouseTaskModel {
       type: t,
       title: json['title'] ?? 'Warehouse Task',
       description: json['description'] ?? '',
-      warehouseId: json['warehouse_id'] ?? 'wh_chicago_01',
+      warehouseId: json['warehouse_id'] ?? '',
       productId: json['product_id'],
       productName: json['product_name'],
       productSku: json['product_sku'],

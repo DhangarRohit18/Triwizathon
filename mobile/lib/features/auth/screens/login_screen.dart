@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,8 +13,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailController = TextEditingController(text: 'operator@stockpilot.ai');
-  final _passwordController = TextEditingController(text: 'Admin123!');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
 
@@ -29,24 +30,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final rawEmail = (email ?? _emailController.text).trim();
     final rawPassword = (password ?? _passwordController.text).trim();
 
-    final resolvedEmail = rawEmail.isEmpty ? 'operator@stockpilot.ai' : rawEmail;
-    final resolvedPassword = rawPassword.isEmpty ? 'Admin123!' : rawPassword;
+    if (rawEmail.isEmpty || rawPassword.isEmpty) {
+      setState(() => _errorMessage = 'Please provide both corporate email and password.');
+      return;
+    }
 
     try {
       await ref.read(authNotifierProvider.notifier).login(
-            resolvedEmail,
-            resolvedPassword,
+            rawEmail,
+            rawPassword,
           );
       if (mounted) context.go('/dashboard');
     } catch (e) {
-      setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
+      final msg = e.toString().replaceAll('Exception: ', '').replaceAll('AppException: ', '');
+      setState(() => _errorMessage = msg.isNotEmpty ? msg : 'Authentication failed. Please verify credentials.');
     }
   }
 
   void _fillAccount(String email) {
+    if (!kDebugMode) return;
     _emailController.text = email;
     _passwordController.text = 'Admin123!';
-    _handleLogin(email, 'Admin123!');
   }
 
   @override
@@ -223,42 +227,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ],
                         ),
                 ),
-                const SizedBox(height: 28),
-
-                // Evaluation Accounts (1-Tap Instant Dashboard Access)
-                const Row(
-                  children: [
-                    Expanded(child: Divider(color: AppColors.borderLight)),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        '1-TAP QUICK ROLES (TAP TO OPEN DASHBOARD)',
-                        style: TextStyle(
-                          color: AppColors.textSecondaryLight,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
+                if (kDebugMode) ...[
+                  const SizedBox(height: 28),
+                  const Row(
+                    children: [
+                      Expanded(child: Divider(color: AppColors.borderLight)),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'DEV TEST ACCOUNTS (DEBUG ONLY)',
+                          style: TextStyle(
+                            color: AppColors.textSecondaryLight,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(child: Divider(color: AppColors.borderLight)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    _buildAccountChip('Operator', 'operator@stockpilot.ai', Icons.qr_code_scanner),
-                    _buildAccountChip('Warehouse Mgr', 'warehouse.manager@stockpilot.ai', Icons.storefront),
-                    _buildAccountChip('Supply Chain', 'supplychain@stockpilot.ai', Icons.hub_outlined),
-                    _buildAccountChip('Distributor', 'distributor@stockpilot.ai', Icons.local_shipping_outlined),
-                    _buildAccountChip('Org Admin', 'orgadmin@stockpilot.ai', Icons.business_outlined),
-                    _buildAccountChip('Super Admin', 'superadmin@stockpilot.ai', Icons.admin_panel_settings_outlined),
-                  ],
-                ),
+                      Expanded(child: Divider(color: AppColors.borderLight)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _buildAccountChip('Operator', 'operator@stockpilot.ai', Icons.qr_code_scanner),
+                      _buildAccountChip('Warehouse Mgr', 'warehouse.manager@stockpilot.ai', Icons.storefront),
+                      _buildAccountChip('Supply Chain', 'supplychain@stockpilot.ai', Icons.hub_outlined),
+                      _buildAccountChip('Distributor', 'distributor@stockpilot.ai', Icons.local_shipping_outlined),
+                      _buildAccountChip('Org Admin', 'orgadmin@stockpilot.ai', Icons.business_outlined),
+                      _buildAccountChip('Super Admin', 'superadmin@stockpilot.ai', Icons.admin_panel_settings_outlined),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

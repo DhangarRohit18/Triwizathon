@@ -7,13 +7,9 @@ class TransferRepository {
   TransferRepository({required this.apiClient});
 
   Future<List<TransferModel>> getTransfers() async {
-    try {
-      final res = await apiClient.get('/transfers');
-      final list = res.data as List;
-      return list.map((e) => TransferModel.fromJson(e as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return _getDemoTransfers();
-    }
+    final res = await apiClient.get('/transfers');
+    final list = res.data as List;
+    return list.map((e) => TransferModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<bool> approveOrReject({
@@ -52,40 +48,5 @@ class TransferRepository {
     );
     return res.statusCode == 200 || res.statusCode == 201;
   }
-
-  List<TransferModel> _getDemoTransfers() {
-    return [
-      TransferModel(
-        id: 'trf_001_chi_ny',
-        transferNumber: 'TRF-2026-0891',
-        sourceWarehouseId: 'wh_chicago_01',
-        sourceWarehouseName: 'Central Hub Chicago',
-        targetWarehouseId: 'wh_ny_02',
-        targetWarehouseName: 'East DC New York',
-        items: [
-          TransferItemModel(
-            productId: 'prd_vax_01',
-            productName: 'Comirnaty Ultra-Cold Vaccine',
-            productSku: 'PRD-VAX-01',
-            batchNumberVal: 'BATCH-COV-8821',
-            quantity: 300,
-            unitCost: 22.50,
-          ),
-          TransferItemModel(
-            productId: 'prd_bio_04',
-            productName: 'Keytruda Oncology Infusion',
-            productSku: 'PRD-BIO-04',
-            batchNumberVal: 'BATCH-INS-4412',
-            quantity: 25,
-            unitCost: 480.00,
-          ),
-        ],
-        status: 'PENDING_APPROVAL',
-        requestedByName: 'Elena Rostova',
-        estimatedTransportCost: 340.50,
-        notes: 'Urgent replenishment for East Coast hospital network demand surge',
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
-      ),
-    ];
-  }
 }
+

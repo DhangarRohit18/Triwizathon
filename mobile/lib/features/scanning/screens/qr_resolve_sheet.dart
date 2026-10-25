@@ -60,7 +60,10 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
   String get _warehouseId {
     final wh = widget.resolvedData['warehouse'];
     if (wh is Map && wh['id'] != null) return wh['id'].toString();
-    return widget.resolvedData['warehouse_id']?.toString() ?? 'wh_chicago_01';
+    final rawWh = widget.resolvedData['warehouse_id']?.toString();
+    if (rawWh != null && rawWh.isNotEmpty) return rawWh;
+    final user = ref.read(authNotifierProvider).user;
+    return user?.warehouseId ?? '';
   }
 
   String get _batchNumber {

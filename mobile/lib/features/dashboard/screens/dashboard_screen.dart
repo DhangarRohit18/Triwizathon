@@ -89,7 +89,24 @@ class DashboardScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const OfflineBanner(),
+              OfflineBanner(
+                pendingCount: ref.watch(pendingSyncCountProvider),
+                onSyncNow: () async {
+                  final synced = await ref.read(inventoryRepositoryProvider).syncPendingQueue();
+                  ref.read(pendingSyncCountProvider.notifier).state =
+                      ref.read(localStorageProvider).getPendingQueue().length;
+                  ref.invalidate(inventoryListProvider);
+                  ref.invalidate(batchesListProvider);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Synchronized $synced queued operations with backend.'),
+                        backgroundColor: AppColors.tealAccent,
+                      ),
+                    );
+                  }
+                },
+              ),
               const SizedBox(height: 6),
 
               // Role Identity Banner
@@ -247,17 +264,44 @@ class DashboardScreen extends ConsumerWidget {
         inventoryAsync.when(
           data: (items) {
             final Map<String, int> warehouseStock = {};
+            final Map<String, String> warehouseNames = {};
             for (final i in items) {
-              final wh = i.warehouseId.isNotEmpty ? i.warehouseId : 'wh_chicago_01';
-              warehouseStock[wh] = (warehouseStock[wh] ?? 0) + i.quantityAvailable;
+              if (i.warehouseId.isNotEmpty) {
+                warehouseStock[i.warehouseId] = (warehouseStock[i.warehouseId] ?? 0) + i.quantityAvailable;
+                warehouseNames[i.warehouseId] = i.warehouseName.isNotEmpty ? i.warehouseName : 'Facility (${i.warehouseId})';
+              }
             }
 
-            final nodes = [
-              {'id': 'wh_chicago_01', 'name': 'Central Hub Chicago', 'type': 'Cold Storage & Distribution'},
-              {'id': 'wh_ny_02', 'name': 'New York BioLogistics Hub', 'type': 'Deep Freeze Vaccine Hub'},
-              {'id': 'wh_dallas_02', 'name': 'Dallas Cold Storage Facility', 'type': 'Regional Distribution Center'},
-              {'id': 'wh_boston_01', 'name': 'Boston Distribution Center', 'type': 'Urban Quick-Commerce Hub'},
-            ];
+            if (warehouseStock.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warehouse_outlined, color: AppColors.textSecondaryLight, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No facility clusters provisioned. Facilities will appear as inventories are registered.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final nodes = warehouseStock.keys.map((whId) {
+              return {
+                'id': whId,
+                'name': warehouseNames[whId] ?? whId,
+                'type': 'Cold Storage & Distribution',
+              };
+            }).toList();
 
             return Column(
               children: nodes.map((node) {
@@ -290,8 +334,8 @@ class DashboardScreen extends ConsumerWidget {
               }).toList(),
             );
           },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load facility clusters: $e'),
         ),
         const SizedBox(height: 16),
 
@@ -552,19 +596,17 @@ class DashboardScreen extends ConsumerWidget {
                 Expanded(
                   child: devicesAsync.when(
                     data: (devs) {
-                      final whDev = devs.firstWhere(
-                        (d) => d.warehouseId == user?.warehouseId,
-                        orElse: () => devs.isNotEmpty ? devs.first : IoTDeviceModel(
-                          deviceId: 'TEMP-SENSOR',
-                          warehouseId: user?.warehouseId ?? 'wh_chicago_01',
-                          warehouseName: 'Facility',
-                          currentTemp: 4.2,
-                          currentHumidity: 52.0,
-                          tempMinThreshold: 2.0,
-                          tempMaxThreshold: 8.0,
-                          isOnline: true,
-                        ),
-                      );
+                      final matching = devs.where((d) => d.warehouseId == user?.warehouseId).toList();
+                      if (matching.isEmpty) {
+                        return const KpiCard(
+                          title: 'BAY STORAGE TEMP',
+                          value: 'N/A',
+                          icon: Icons.sensors_off_outlined,
+                          accentColor: AppColors.textSecondaryLight,
+                          trendLabel: 'No sensor provisioned in bay',
+                        );
+                      }
+                      final whDev = matching.first;
                       return KpiCard(
                         title: 'BAY STORAGE TEMP',
                         value: '${whDev.currentTemp.toStringAsFixed(1)}°C',
@@ -690,27 +732,7 @@ class DashboardScreen extends ConsumerWidget {
             );
           },
           loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-          error: (_, __) => Row(
-            children: [
-              Expanded(
-                child: KpiCard(
-                  title: 'ASSIGNED DROPS',
-                  value: 'Live',
-                  icon: Icons.local_shipping_outlined,
-                  accentColor: AppColors.tealAccent,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: KpiCard(
-                  title: 'DELIVERY UNITS',
-                  value: 'In Fleet',
-                  icon: Icons.inventory_2_outlined,
-                  accentColor: AppColors.primaryNavy,
-                ),
-              ),
-            ],
-          ),
+          error: (e, _) => _buildErrorCard('Failed to load fleet delivery manifest: $e'),
         ),
         const SizedBox(height: 16),
 

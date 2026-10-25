@@ -8,8 +8,51 @@ class ApiConfig {
 
   static String get baseUrl => _customUrl ?? defaultBaseUrl;
 
+  /// Validates and normalizes an API URL before saving.
+  /// Throws [FormatException] if URL is malformed, uses unsupported scheme,
+  /// contains embedded credentials, or uses HTTP for a remote production host.
+  static String validateAndNormalizeUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('API URL cannot be empty.');
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+      throw const FormatException('Invalid URL format. Please include host and port (e.g., http://10.0.2.2:8000/api/v1).');
+    }
+
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      throw const FormatException('Unsupported URL scheme. Only HTTP and HTTPS are permitted.');
+    }
+
+    if (uri.userInfo.isNotEmpty) {
+      throw const FormatException('Embedded credentials in API URLs are strictly prohibited.');
+    }
+
+    // Require HTTPS for non-local production hosts
+    final host = uri.host.toLowerCase();
+    final isLocal = host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '10.0.2.2' ||
+        host.startsWith('192.168.') ||
+        host.startsWith('10.') ||
+        host.endsWith('.local');
+
+    if (!isLocal && uri.scheme != 'https') {
+      throw const FormatException('Deployed remote environments require HTTPS for data security.');
+    }
+
+    // Remove any trailing slashes for clean path joining
+    return trimmed.replaceAll(RegExp(r'/+$'), '');
+  }
+
   static void setCustomBaseUrl(String url) {
-    _customUrl = url;
+    _customUrl = validateAndNormalizeUrl(url);
+  }
+
+  static void resetCustomBaseUrl() {
+    _customUrl = null;
   }
 
   // Automatically picks host loopback depending on Android Emulator vs Desktop/Web

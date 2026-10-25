@@ -4,6 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stockpilot_mobile/core/errors/app_exception.dart';
 import 'package:stockpilot_mobile/core/networking/api_client.dart';
 import 'package:stockpilot_mobile/data/repositories/inventory_repository.dart';
+import 'package:stockpilot_mobile/data/repositories/iot_repository.dart';
+import 'package:stockpilot_mobile/data/repositories/optimization_repository.dart';
+import 'package:stockpilot_mobile/data/repositories/task_repository.dart';
+import 'package:stockpilot_mobile/data/repositories/transfer_repository.dart';
 import 'package:stockpilot_mobile/data/services/local_storage_service.dart';
 
 // Fake ApiClient that simulates server responses or exceptions
@@ -237,6 +241,61 @@ void main() {
       // Must NOT queue rejected operation as a valid offline draft
       final queue = localStorage.getPendingQueue();
       expect(queue.length, 0);
+    });
+
+    test('Network failures in inventory and batches propagate errors and NEVER substitute demo records', () async {
+      mockApi.exceptionToThrow = NetworkException('Connection reset by peer');
+
+      expect(() async => await repo.getInventory(), throwsA(isA<NetworkException>()));
+      expect(() async => await repo.getBatches(), throwsA(isA<NetworkException>()));
+      expect(() async => await repo.resolveQrCode('SOME-CODE'), throwsA(isA<NetworkException>()));
+    });
+
+    test('TransferRepository and IoTRepository propagate exceptions without silent demo fallbacks', () async {
+      mockApi.exceptionToThrow = NetworkException('Host unreachable');
+
+      final transferRepo = TransferRepository(apiClient: mockApi);
+      expect(() async => await transferRepo.getTransfers(), throwsA(isA<NetworkException>()));
+
+      final iotRepo = IoTRepository(apiClient: mockApi);
+      expect(() async => await iotRepo.getDevices(), throwsA(isA<NetworkException>()));
+      expect(() async => await iotRepo.getAlerts(), throwsA(isA<NetworkException>()));
+    });
+
+    test('OptimizationRepository returns empty list when no optimization runs exist', () async {
+      mockApi.exceptionToThrow = null;
+      // get() returns [] for other paths in MockApiClient
+      final optRepo = OptimizationRepository(apiClient: mockApi);
+      final recs = await optRepo.getLatestRecommendations();
+      expect(recs, isEmpty);
+    });
+
+    test('syncPendingQueue retries network errors but removes terminal business rejections', () async {
+      // 1. Put an operation in the queue
+      await localStorage.queueOperation({
+        'action': 'receive',
+        'endpoint': '/inventory/receive',
+        'payload': {'product_id': 'PRD-01', 'quantity': 10},
+        'correlation_id': 'CORR-TEST-TERMINAL',
+      });
+      expect(localStorage.getPendingQueue().length, 1);
+
+      // 2. Simulate terminal 400 validation rejection
+      mockApi.exceptionToThrow = ValidationException('Invalid storage bin');
+      final synced = await repo.syncPendingQueue();
+      expect(synced, 0);
+
+      // Terminal rejections must be discarded to prevent permanent sync blocking
+      expect(localStorage.getPendingQueue().length, 0);
+    });
+
+    test('TaskRepository completes task via authoritative backend endpoint', () async {
+      mockApi.exceptionToThrow = null;
+      final taskRepo = TaskRepository(apiClient: mockApi);
+      await taskRepo.completeTask('tsk_floor_001', notes: 'Verified and packed');
+
+      expect(mockApi.lastPath, '/tasks/tsk_floor_001/complete');
+      expect(mockApi.lastData['notes'], 'Verified and packed');
     });
   });
 }

@@ -7,6 +7,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/user_model.dart';
 import '../../inventory/providers/inventory_provider.dart';
+import '../../iot/providers/iot_provider.dart';
+import '../../tasks/providers/tasks_provider.dart';
+import '../../transfers/providers/transfers_provider.dart';
 import '../providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -18,6 +21,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _urlController = TextEditingController();
+  bool _isTestingConnection = false;
+  String? _urlValidationMessage;
 
   @override
   void initState() {
@@ -31,16 +36,83 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.dispose();
   }
 
-  void _updateBaseUrl() {
-    final newUrl = _urlController.text.trim();
-    if (newUrl.isNotEmpty) {
-      ApiConfig.setCustomBaseUrl(newUrl);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('API Server URL updated to: $newUrl'),
-          backgroundColor: AppColors.tealAccent,
-        ),
-      );
+  Future<void> _updateBaseUrl() async {
+    final rawUrl = _urlController.text.trim();
+    setState(() {
+      _isTestingConnection = true;
+      _urlValidationMessage = null;
+    });
+
+    try {
+      final normalized = ApiConfig.validateAndNormalizeUrl(rawUrl);
+      final apiClient = ref.read(apiClientProvider);
+
+      // Verify connection to the candidate host
+      final isReachable = await apiClient.testConnection(normalized);
+
+      if (!mounted) return;
+
+      if (!isReachable) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Host Reachability Warning'),
+            content: Text(
+              'Could not establish a connection to "$normalized". '
+              'The server might be offline or starting up.\n\n'
+              'Do you still want to apply this URL configuration?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.warningAmber),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Apply Anyway'),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) {
+          setState(() => _isTestingConnection = false);
+          return;
+        }
+      }
+
+      // Apply and persist to client and SharedPreferences
+      apiClient.updateBaseUrl(normalized);
+      _urlController.text = normalized;
+
+      // Invalidate all cached network providers to fetch from new host
+      ref.invalidate(inventoryListProvider);
+      ref.invalidate(batchesListProvider);
+      ref.invalidate(expiringBatchesProvider);
+      ref.invalidate(transfersListProvider);
+      ref.invalidate(pendingTransfersProvider);
+      ref.invalidate(iotDevicesProvider);
+      ref.invalidate(iotAlertsProvider);
+      ref.invalidate(tasksListProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isReachable
+                ? 'API Endpoint updated & verified online: $normalized'
+                : 'API Endpoint updated: $normalized'),
+            backgroundColor: isReachable ? AppColors.successGreen : AppColors.warningAmber,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _urlValidationMessage = e.toString().replaceAll('FormatException: ', ''));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTestingConnection = false);
+      }
     }
   }
 
@@ -99,35 +171,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         Text(
                           user?.name ?? 'Authorized Personnel',
                           style: const TextStyle(
-                            fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            fontWeight: FontWeight.bold,
                             color: AppColors.primaryNavy,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          user?.email ?? 'operator@stockpilot.ai',
+                          user?.email ?? '',
                           style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
                         ),
                         const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            StatusBadge.status(
-                              status: currentRole.displayName.toUpperCase(),
-                              customColor: AppColors.tealAccent,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              user?.organizationId ?? 'org_triwiz_01',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontFamily: 'monospace',
-                                color: AppColors.textSecondaryLight,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                        StatusBadge.status(status: currentRole.displayName, customColor: AppColors.tealAccent),
                       ],
                     ),
                   ),
@@ -136,9 +191,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Active Facility Scope
+            // Operational Scoping
             const Text(
-              'ASSIGNED WAREHOUSE FACILITY',
+              'FACILITY & TENANT ACCESS',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -148,36 +203,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: 8),
             Container(
-              width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.pureWhite,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.borderLight),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  const Icon(Icons.warehouse_outlined, color: AppColors.tealAccent, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.warehouseName ?? 'Central Hub Chicago',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: AppColors.primaryNavy,
-                          ),
+                  Row(
+                    children: [
+                      const Icon(Icons.business_outlined, size: 20, color: AppColors.tealAccent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Tenant Organization',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.primaryNavy,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.orgId ?? 'Unassigned Organization',
+                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Facility ID: ${user?.warehouseId ?? "Multi-Hub"} • Cold-Chain Certified',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 18),
+                  Row(
+                    children: [
+                      const Icon(Icons.storefront_outlined, size: 20, color: AppColors.tealAccent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user?.warehouseName ?? 'Unassigned Facility',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.primaryNavy,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.warehouseId != null
+                                  ? 'Primary Facility ID: ${user!.warehouseId}'
+                                  : 'Network-Wide Access Granted',
+                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -269,19 +356,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(color: AppColors.borderLight),
                       ),
+                      errorText: _urlValidationMessage,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _updateBaseUrl,
+                  onPressed: _isTestingConnection ? null : _updateBaseUrl,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryNavy,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
-                  child: const Text('Save', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: _isTestingConnection
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save & Test', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

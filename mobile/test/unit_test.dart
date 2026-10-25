@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stockpilot_mobile/core/config/api_config.dart';
+import 'package:stockpilot_mobile/core/networking/api_client.dart';
 import 'package:stockpilot_mobile/data/models/batch_model.dart';
 import 'package:stockpilot_mobile/data/models/inventory_model.dart';
 import 'package:stockpilot_mobile/data/models/iot_model.dart';
+import 'package:stockpilot_mobile/data/models/task_model.dart';
 import 'package:stockpilot_mobile/data/models/transfer_model.dart';
 import 'package:stockpilot_mobile/data/models/user_model.dart';
 import 'package:stockpilot_mobile/data/services/local_storage_service.dart';
@@ -213,6 +216,81 @@ void main() {
         () => UserRole.fromString('UNKNOWN_HACKER_ROLE'),
         throwsFormatException,
       );
+
+      // 6. Network-wide scope helpers
+      expect(superAdmin.hasNetworkWideScope, true);
+      expect(opCentral.hasNetworkWideScope, false);
+      expect(whMgr.hasNetworkWideScope, false);
+    });
+  });
+
+  group('ApiConfig URL Validation & Normalization Tests', () {
+    test('Permits valid local development HTTP endpoints', () {
+      expect(ApiConfig.validateAndNormalizeUrl('http://10.0.2.2:8000/api/v1'), 'http://10.0.2.2:8000/api/v1');
+      expect(ApiConfig.validateAndNormalizeUrl('http://localhost:8000'), 'http://localhost:8000');
+      expect(ApiConfig.validateAndNormalizeUrl('http://127.0.0.1:8000/api/v1/'), 'http://127.0.0.1:8000/api/v1');
+      expect(ApiConfig.validateAndNormalizeUrl('http://192.168.1.50:8000'), 'http://192.168.1.50:8000');
+    });
+
+    test('Requires HTTPS for deployed remote production hosts', () {
+      expect(
+        ApiConfig.validateAndNormalizeUrl('https://api.stockpilot.ai/v1'),
+        'https://api.stockpilot.ai/v1',
+      );
+
+      // Remote host using HTTP must be strictly rejected
+      expect(
+        () => ApiConfig.validateAndNormalizeUrl('http://api.stockpilot.ai/v1'),
+        throwsFormatException,
+      );
+    });
+
+    test('Rejects malformed URLs, empty strings, and embedded credentials', () {
+      expect(() => ApiConfig.validateAndNormalizeUrl(''), throwsFormatException);
+      expect(() => ApiConfig.validateAndNormalizeUrl('   '), throwsFormatException);
+      expect(() => ApiConfig.validateAndNormalizeUrl('not-a-valid-url'), throwsFormatException);
+      expect(() => ApiConfig.validateAndNormalizeUrl('ftp://example.com/api'), throwsFormatException);
+      expect(
+        () => ApiConfig.validateAndNormalizeUrl('https://admin:secret123@api.stockpilot.ai'),
+        throwsFormatException,
+      );
+    });
+  });
+
+  group('ApiClient Dynamic Base URL Switching Tests', () {
+    test('updateBaseUrl updates client options and persists to SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final client = ApiClient(prefs: prefs);
+
+      client.updateBaseUrl('https://api.stockpilot.ai/v1');
+
+      expect(client.dio.options.baseUrl, 'https://api.stockpilot.ai/v1');
+      expect(ApiConfig.baseUrl, 'https://api.stockpilot.ai/v1');
+      expect(prefs.getString(ApiConfig.keyCustomBaseUrl), 'https://api.stockpilot.ai/v1');
+
+      // Reset
+      ApiConfig.resetCustomBaseUrl();
+    });
+  });
+
+  group('WarehouseTaskModel Tests', () {
+    test('Task completion and type parsing', () {
+      final json = {
+        'id': 'tsk_001',
+        'type': 'cycle_count',
+        'title': 'Audit Bay 4',
+        'description': 'Count vaccines in bay 4',
+        'warehouse_id': 'WH-CENTRAL-01',
+        'status': 'completed',
+        'priority': 'high',
+        'created_at': '2026-10-24T10:00:00',
+      };
+
+      final task = WarehouseTaskModel.fromJson(json);
+      expect(task.type, TaskType.cycleCount);
+      expect(task.isCompleted, true);
+      expect(task.warehouseId, 'WH-CENTRAL-01');
     });
   });
 }
