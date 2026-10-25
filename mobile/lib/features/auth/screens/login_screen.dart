@@ -13,7 +13,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController(text: 'operator@stockpilot.ai');
-  final _passwordController = TextEditingController();
+  final _passwordController = TextEditingController(text: 'Admin123!');
   bool _obscurePassword = true;
   String? _errorMessage;
 
@@ -24,12 +24,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() async {
+  void _handleLogin([String? email, String? password]) async {
     setState(() => _errorMessage = null);
+    final rawEmail = (email ?? _emailController.text).trim();
+    final rawPassword = (password ?? _passwordController.text).trim();
+
+    final resolvedEmail = rawEmail.isEmpty ? 'operator@stockpilot.ai' : rawEmail;
+    final resolvedPassword = rawPassword.isEmpty ? 'Admin123!' : rawPassword;
+
     try {
       await ref.read(authNotifierProvider.notifier).login(
-            _emailController.text.trim(),
-            _passwordController.text,
+            resolvedEmail,
+            resolvedPassword,
           );
       if (mounted) context.go('/dashboard');
     } catch (e) {
@@ -39,7 +45,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _fillAccount(String email) {
     _emailController.text = email;
-    _passwordController.clear();
+    _passwordController.text = 'Admin123!';
+    _handleLogin(email, 'Admin123!');
   }
 
   @override
@@ -188,7 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Sign In Button
                 ElevatedButton(
-                  onPressed: isLoading ? null : _handleLogin,
+                  onPressed: isLoading ? null : () => _handleLogin(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.tealAccent,
                     foregroundColor: Colors.white,
@@ -202,21 +209,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text(
-                          'Sign In to StockPilot',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.login_rounded, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Sign In to Dashboard',
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_rounded, size: 16),
+                          ],
                         ),
                 ),
                 const SizedBox(height: 28),
 
-                // Evaluation Accounts
+                // Evaluation Accounts (1-Tap Instant Dashboard Access)
                 const Row(
                   children: [
                     Expanded(child: Divider(color: AppColors.borderLight)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'TEST ROLES (LIVE BACKEND AUTH)',
+                        '1-TAP QUICK ROLES (TAP TO OPEN DASHBOARD)',
                         style: TextStyle(
                           color: AppColors.textSecondaryLight,
                           fontSize: 10,
