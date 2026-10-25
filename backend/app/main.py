@@ -32,10 +32,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_origin_regex=r"^chrome-extension://[a-z]{32}$",
+    allow_origin_regex=r"^(chrome-extension|moz-extension|ms-browser-extension|extension)://.*$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-IoT-Key", "X-Device-ID", "X-Device-API-Key", "X-API-Key", "X-Bridge-Key", "X-Extension-Key"],
+    allow_headers=["*"],
 )
 
 # Mount API Router

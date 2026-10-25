@@ -256,38 +256,60 @@ async function apiFetch(path, options = {}) {
     ...(options.headers || {})
   };
 
+  let targetUrl = `${apiBase}${path}`;
+  let res;
+
   try {
-    const res = await fetch(`${apiBase}${path}`, { ...options, headers });
-
-    if (res.status === 401) {
-      await handleLogout("Your session has expired or is invalid. Please sign in again.");
-      throw new Error("Unauthorized");
-    }
-
-    if (res.status === 403) {
-      const err = await res.json().catch(() => ({}));
-      const msg = err.detail || "Access forbidden. Your role does not permit this action.";
-      showBanner(msg, "warning");
-      throw new Error(msg);
-    }
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server returned status ${res.status}`);
-    }
-
-    setOnline(true);
-    return await res.json();
+    res = await fetch(targetUrl, { ...options, headers });
   } catch (err) {
-    if (err.name === "AbortError") {
-      throw err; // Let caller handle aborts silently
+    if (err.name === "AbortError") throw err;
+
+    // Dual-stack localhost/127.0.0.1 automatic fallback
+    let alternateBase = null;
+    if (apiBase.includes("localhost")) {
+      alternateBase = apiBase.replace("localhost", "127.0.0.1");
+    } else if (apiBase.includes("127.0.0.1")) {
+      alternateBase = apiBase.replace("127.0.0.1", "localhost");
     }
-    if (err.message.includes("Failed to fetch") || err.name === "TypeError") {
+
+    if (alternateBase) {
+      try {
+        const altUrl = `${alternateBase}${path}`;
+        res = await fetch(altUrl, { ...options, headers });
+        apiBase = alternateBase;
+        Storage.set("stockpilot_api_base", apiBase);
+      } catch (_) {
+        // Both failed
+      }
+    }
+
+    if (!res) {
       setOnline(false, "Connection error");
-      showBanner(`Cannot connect to StockPilot server at ${apiBase}`, "error");
+      const helpfulMsg = `Cannot connect to StockPilot backend at ${apiBase}. Ensure FastAPI server is running (uvicorn app.main:app --port 8000).`;
+      showBanner(helpfulMsg, "error");
+      throw new Error(helpfulMsg);
     }
-    throw err;
   }
+
+  if (res.status === 401) {
+    await handleLogout("Your session has expired or is invalid. Please sign in again.");
+    throw new Error("Unauthorized");
+  }
+
+  if (res.status === 403) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err.detail || "Access forbidden. Your role does not permit this action.";
+    showBanner(msg, "warning");
+    throw new Error(msg);
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Server returned status ${res.status}`);
+  }
+
+  setOnline(true);
+  return await res.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -1329,18 +1351,11 @@ async function selectRbacRole(roleKey) {
   showBanner(`Activating ${roleKey.replace(/_/g, " ").toUpperCase()} session...`, "info");
 
   try {
-    const res = await fetch(`${apiBase}/auth/demo/switch-role`, {
+    const data = await apiFetch("/auth/demo/switch-role", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: roleKey })
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Role activation failed with status ${res.status}`);
-    }
-
-    const data = await res.json();
     currentToken = data.access_token;
     await Storage.set("stockpilot_token", currentToken);
 
