@@ -49,8 +49,17 @@ def get_current_user(
 def require_roles(allowed_roles: List[str]):
     """Role-level access requirement (backwards compatibility)."""
     def role_checker(user: dict = Depends(get_current_user)) -> dict:
-        user_role = normalize_role(user.get("role"))
-        normalized_allowed = [normalize_role(r) for r in allowed_roles]
+        try:
+            user_role = normalize_role(user.get("role"))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. User has an invalid or unrecognized role: '{user.get('role')}'"
+            )
+        try:
+            normalized_allowed = [normalize_role(r) for r in allowed_roles]
+        except ValueError:
+            normalized_allowed = allowed_roles
         if user_role == ROLE_SUPER_ADMIN:
             return user
         if user_role not in normalized_allowed:
@@ -81,12 +90,17 @@ def get_scoped_warehouse_filter(current_user: dict, requested_warehouse_id: Opti
     Validates and resolves the warehouse filter according to location-scoping rules.
     - If user has restricted warehouse scope, validates that requested_warehouse_id is authorized,
       or automatically defaults to the user's primary assigned warehouse.
-    - Raises 403 if user attempts to access an unauthorized location.
+    - Raises 403 if user attempts to access an unauthorized location or has no assigned warehouse.
     """
     allowed = get_authorized_warehouses(current_user)
     
     if allowed is not None:
         # Restricted location user (Warehouse Manager, Operator, Distributor)
+        if len(allowed) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account has no assigned warehouse facilities."
+            )
         if requested_warehouse_id and requested_warehouse_id != "all":
             if requested_warehouse_id not in allowed:
                 raise HTTPException(

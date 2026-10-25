@@ -14,7 +14,8 @@ import {
   ScanLine,
   Server,
   Building2,
-  LogIn
+  LogIn,
+  Zap
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { RoleType } from '../types';
@@ -49,6 +50,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     badge: 'GATEWAY',
     allowedRoles: ['super_admin'] 
   },
+  { 
+    to: '/express', 
+    label: 'Express Lane SOS', 
+    icon: Zap, 
+    badge: 'EXPRESS',
+    allowedRoles: ['super_admin'] 
+  },
 
   // Org Admin Navigation
   { 
@@ -69,6 +77,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     to: '/inventory', 
     label: 'Global Stock Ledger', 
     icon: Boxes,
+    allowedRoles: ['org_admin'] 
+  },
+  { 
+    to: '/express', 
+    label: 'Express Lane SOS', 
+    icon: Zap, 
+    badge: 'EXPRESS',
     allowedRoles: ['org_admin'] 
   },
   { 
@@ -100,6 +115,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     allowedRoles: ['supply_chain_manager'] 
   },
   { 
+    to: '/express', 
+    label: 'Express Lane SOS', 
+    icon: Zap, 
+    badge: 'EXPRESS',
+    allowedRoles: ['supply_chain_manager'] 
+  },
+  { 
     to: '/inventory', 
     label: 'Multi-Hub Inventory Matrix', 
     icon: Boxes,
@@ -112,6 +134,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     label: 'Facility Dock Management', 
     icon: LayoutDashboard, 
     badge: 'FACILITY',
+    allowedRoles: ['warehouse_manager'] 
+  },
+  { 
+    to: '/express', 
+    label: 'Express Lane SOS', 
+    icon: Zap, 
+    badge: 'EXPRESS',
     allowedRoles: ['warehouse_manager'] 
   },
   { 

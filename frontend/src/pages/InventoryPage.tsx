@@ -19,9 +19,13 @@ import {
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
-  const { selectedWarehouseId, addToast, user } = useAppStore();
+  const { selectedWarehouseId, addToast, user, activeRole } = useAppStore();
   const [activeTab, setActiveTab] = useState<'inventory' | 'batches' | 'ledger'>('inventory');
   const [loading, setLoading] = useState(false);
+
+  const canReceive = ['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager', 'operator'].includes(activeRole);
+  const canDispatch = ['super_admin', 'org_admin', 'warehouse_manager'].includes(activeRole);
+  const canAdjust = ['super_admin', 'org_admin', 'warehouse_manager'].includes(activeRole);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [batches, setBatches] = useState<InventoryBatch[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
@@ -146,26 +150,32 @@ export const InventoryPage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => setActionModal('receive')}
-            className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0D9488] text-white font-bold text-xs shadow-md shadow-sm flex items-center gap-1.5 transition-all"
-          >
-            <ArrowDownLeft className="w-4 h-4" />
-            Receive Stock
-          </button>
-          <button
-            onClick={() => setActionModal('dispatch')}
-            className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0D9488]/100 text-white font-bold text-xs shadow-md shadow-sm flex items-center gap-1.5 transition-all"
-          >
-            <ArrowUpRight className="w-4 h-4" />
-            Dispatch Stock
-          </button>
-          <button
-            onClick={() => setActionModal('adjust')}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors"
-          >
-            Cycle Count
-          </button>
+          {canReceive && (
+            <button
+              onClick={() => setActionModal('receive')}
+              className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0D9488]/90 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <ArrowDownLeft className="w-4 h-4" />
+              Receive Stock
+            </button>
+          )}
+          {canDispatch && (
+            <button
+              onClick={() => setActionModal('dispatch')}
+              className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0D9488]/90 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              Dispatch Stock
+            </button>
+          )}
+          {canAdjust && (
+            <button
+              onClick={() => setActionModal('adjust')}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+            >
+              Cycle Count
+            </button>
+          )}
         </div>
       </div>
 

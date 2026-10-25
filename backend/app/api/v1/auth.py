@@ -298,7 +298,14 @@ def demo_switch_role(req: RoleSwitchRequest):
     """
     Development & evaluation helper: quickly switches active role persona
     among the 6 enterprise roles to test all role dashboards.
+    Disabled in production mode.
     """
+    if not settings.ALLOW_DEMO_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Role simulation is disabled in production environments."
+        )
+
     matching_users = db.query("users", filters={"role": req.role.value})
     if not matching_users:
         raise HTTPException(status_code=404, detail=f"No seed persona found for role '{req.role.value}'")

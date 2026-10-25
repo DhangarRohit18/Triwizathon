@@ -88,7 +88,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceGraphite,
+        backgroundColor: Colors.white,
         title: const Text('Manual Lookup / Emulator Presets'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -134,7 +134,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.tealAccent,
-              foregroundColor: AppColors.navyDark,
+              foregroundColor: Colors.white,
             ),
             onPressed: () {
               final code = textController.text.trim();
@@ -152,8 +152,9 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
 
   Widget _buildPresetChip(String label, TextEditingController controller) {
     return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 11)),
-      backgroundColor: AppColors.navyDark,
+      label: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.navyDark, fontWeight: FontWeight.w600)),
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: AppColors.tealAccent),
       onPressed: () => controller.text = label,
     );
   }

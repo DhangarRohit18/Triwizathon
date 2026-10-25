@@ -6,7 +6,6 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/recommendation_model.dart';
 import '../../../data/models/transfer_model.dart';
-import '../../../data/models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/transfers_provider.dart';
 
@@ -110,7 +109,7 @@ class _TransfersScreenState extends ConsumerState<TransfersScreen>
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authNotifierProvider).user;
-    final canApprove = user?.role != UserRole.warehouseOperator;
+    final canApprove = user?.canApproveTransfers ?? false;
     final transfersAsync = ref.watch(transfersListProvider);
     final recommendationsAsync = ref.watch(recommendationsProvider);
 
@@ -186,8 +185,9 @@ class _TransfersScreenState extends ConsumerState<TransfersScreen>
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppColors.navyDark,
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.borderGraphite),
                             ),
                             child: Column(
                               children: t.items.map((item) {
@@ -196,11 +196,11 @@ class _TransfersScreenState extends ConsumerState<TransfersScreen>
                                   children: [
                                     Text(
                                       '${item.productName} (Batch: ${item.batchNumber})',
-                                      style: const TextStyle(fontSize: 11),
+                                      style: const TextStyle(fontSize: 11, color: AppColors.navyDark),
                                     ),
                                     Text(
                                       '${item.quantity} units',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.tealAccent),
                                     ),
                                   ],
                                 );
@@ -334,8 +334,9 @@ class _TransfersScreenState extends ConsumerState<TransfersScreen>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.navyDark,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.borderGraphite),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,7 +345,7 @@ class _TransfersScreenState extends ConsumerState<TransfersScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Est. Transport Cost:', style: TextStyle(fontSize: 11, color: AppColors.textSecondaryDark)),
-                    Text('\$${r.estimatedTransportCost.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text('\$${r.estimatedTransportCost.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.navyDark)),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -366,23 +367,53 @@ class _TransfersScreenState extends ConsumerState<TransfersScreen>
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.tealAccent,
-                foregroundColor: AppColors.navyDark,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              icon: const Icon(Icons.check_circle_outline, size: 16),
-              label: const Text('APPROVE PROPOSED TRANSFER'),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Recommendation approved! Created transfer draft for ${r.recommendedQuantity} units of ${r.productName}.'),
-                    backgroundColor: AppColors.successGreen,
+            child: r.transferred
+                ? OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.successGreen,
+                      side: const BorderSide(color: AppColors.successGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    icon: const Icon(Icons.check_circle, size: 16),
+                    label: const Text('TRANSFER REQUEST CREATED'),
+                    onPressed: null,
+                  )
+                : ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.tealAccent,
+                      foregroundColor: AppColors.navyDark,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: const Text('CREATE TRANSFER REQUEST'),
+                    onPressed: () async {
+                      try {
+                        final repo = ref.read(transferRepositoryProvider);
+                        await repo.createTransferFromRecommendation(
+                          runId: 'opt_mobile_run',
+                          recommendationId: r.id,
+                          notes: 'Initiated from mobile AI recommendation',
+                        );
+                        ref.invalidate(transfersListProvider);
+                        ref.invalidate(recommendationsProvider);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Transfer request created for ${r.recommendedQuantity} units of ${r.productName}. Reserved in source hub.'),
+                            backgroundColor: AppColors.successGreen,
+                          ),
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to create transfer: $e'),
+                            backgroundColor: AppColors.errorRed,
+                          ),
+                        );
+                      }
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),

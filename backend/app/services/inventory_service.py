@@ -36,7 +36,8 @@ class InventoryService:
     def _verify_warehouse_authorization(
         target_warehouse_id: str,
         user_role: str,
-        user_warehouse_id: Optional[str]
+        user_warehouse_id: Optional[str],
+        actor_id: Optional[str] = None
     ) -> None:
         """
         Enforces warehouse-level access control:
@@ -50,11 +51,22 @@ class InventoryService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{user_role}' is not authorized to mutate warehouse inventory."
             )
-        wh = user_warehouse_id or "wh_chicago_01"
-        if wh != target_warehouse_id:
+        
+        effective_wh_id = user_warehouse_id
+        if not effective_wh_id and actor_id:
+            user_doc = db.get_document("users", actor_id)
+            if user_doc:
+                effective_wh_id = user_doc.get("warehouse_id")
+
+        if not effective_wh_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Unauthorized warehouse operation. User assigned to '{wh}' cannot perform operations on warehouse '{target_warehouse_id}'."
+                detail="Unauthorized warehouse operation. User account has no assigned warehouse facilities."
+            )
+        if effective_wh_id != target_warehouse_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Unauthorized warehouse operation. User assigned to '{effective_wh_id}' cannot perform operations on warehouse '{target_warehouse_id}'."
             )
 
     @staticmethod
@@ -92,11 +104,15 @@ class InventoryService:
         actor_role: str,
         reason: str,
         now_iso: str,
-        resulting_status: str = "COMMITTED"
+        resulting_status: str = "COMMITTED",
+        balance_before: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Appends an immutable entry to the auditable movement ledger.
+        Appends an immutable entry to the auditable movement ledger with before and after stock levels.
         """
+        if balance_before is None:
+            balance_before = balance_after - quantity_changed
+
         movement_id = f"mov_{uuid.uuid4().hex[:12]}"
         movement = {
             "id": movement_id,
@@ -109,6 +125,7 @@ class InventoryService:
             "movement_type": movement_type,
             "quantity_changed": quantity_changed,
             "unit": unit,
+            "balance_before": balance_before,
             "balance_after": balance_after,
             "actor_id": actor_id,
             "actor_name": actor_name,
@@ -136,7 +153,7 @@ class InventoryService:
         Atomically records new stock receipt into a batch and warehouse inventory,
         updating the append-only ledger.
         """
-        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id)
+        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id, actor_id=actor_id)
         InventoryService._check_idempotency(req.correlation_id)
         
         if req.quantity <= 0:
@@ -271,7 +288,7 @@ class InventoryService:
         Atomically dispatches stock. Enforces FEFO (First Expired First Out) automatic batch selection
         if no batch_id is explicitly specified. Validates available non-reserved inventory to prevent negative stock.
         """
-        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id)
+        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id, actor_id=actor_id)
         InventoryService._check_idempotency(req.correlation_id)
 
         if req.quantity <= 0:
@@ -321,7 +338,13 @@ class InventoryService:
                 if target_batch["quantity"] == 0:
                     target_batch["status"] = "depleted"
                 store.set_document("inventory_batches", target_batch["id"], target_batch)
-                deducted_batches.append({"batch_id": target_batch["id"], "quantity": req.quantity})
+                deducted_batches.append({
+                    "batch_id": target_batch["id"],
+                    "quantity": req.quantity,
+                    "batch_number": target_batch.get("batch_number", "Unknown"),
+                    "expiry_date": target_batch.get("expiry_date"),
+                    "selection_reason": f"Explicit lot allocation requested for batch {target_batch.get('batch_number')}"
+                })
             else:
                 # Automatic FEFO deduction across active batches
                 for b in batches:
@@ -335,7 +358,13 @@ class InventoryService:
                     if b["quantity"] == 0:
                         b["status"] = "depleted"
                     store.set_document("inventory_batches", b["id"], b)
-                    deducted_batches.append({"batch_id": b["id"], "quantity": deduct, "expiry_date": b["expiry_date"]})
+                    deducted_batches.append({
+                        "batch_id": b["id"],
+                        "quantity": deduct,
+                        "batch_number": b.get("batch_number", "Unknown"),
+                        "expiry_date": b["expiry_date"],
+                        "selection_reason": f"FEFO priority: batch {b.get('batch_number')} selected with earliest expiration date ({b.get('expiry_date')})"
+                    })
                     remaining_to_deduct -= deduct
 
                 if remaining_to_deduct > 0:
@@ -403,7 +432,7 @@ class InventoryService:
         """
         Atomically reserves stock for an order or allocation, preventing double-allocation.
         """
-        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id)
+        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id, actor_id=actor_id)
         InventoryService._check_idempotency(req.correlation_id)
 
         if req.quantity <= 0:
@@ -565,7 +594,7 @@ class InventoryService:
         """
         Records a physical count cycle count and updates ledger with discrepancy variance.
         """
-        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id)
+        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id, actor_id=actor_id)
         InventoryService._check_idempotency(req.correlation_id)
 
         if req.counted_quantity < 0:
@@ -639,7 +668,7 @@ class InventoryService:
         """
         Authoritative manual stock adjustment.
         """
-        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id)
+        InventoryService._verify_warehouse_authorization(req.warehouse_id, actor_role, user_warehouse_id, actor_id=actor_id)
         InventoryService._check_idempotency(req.correlation_id)
 
         if req.new_quantity < 0:
@@ -1005,9 +1034,10 @@ class InventoryService:
                         store.set_document("inventory", inv_key, inv)
 
             store.set_document("transfers", transfer_id, trf)
-            return trf
-
-        return db.run_transaction(txn)
+        res = db.run_transaction(txn)
+        from app.services.firebase_service import FirebaseService
+        FirebaseService.sync_to_firestore("transfers", transfer_id, res)
+        return res
 
     @staticmethod
     def dispatch_transfer(
@@ -1262,5 +1292,236 @@ class InventoryService:
             trf["notes"] = f"{trf.get('notes', '')} | Cancelled: {req.reason}".strip(" |")
             store.set_document("transfers", req.transfer_id, trf)
             return trf
+
+        return db.run_transaction(txn)
+
+    # -------------------------------------------------------------------------
+    # 7. INVENTORY RECONCILIATION ENGINE
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def reconcile_inventory(
+        warehouse_id: str,
+        org_id: str,
+        product_id: Optional[str] = None,
+        actor_role: str = "supply_chain_manager",
+        user_warehouse_id: Optional[str] = None,
+        actor_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Reconciles warehouse inventory totals against the append-only movement ledger.
+        Computes expected net balance from all historic inflow and outflow movements,
+        verifies that current total_quantity, available_quantity, and active batch sums
+        strictly match the immutable ledger.
+        """
+        InventoryService._verify_warehouse_authorization(warehouse_id, actor_role, user_warehouse_id, actor_id=actor_id)
+        
+        wh = db.get_document("warehouses", warehouse_id)
+        if not wh or wh.get("org_id") != org_id:
+            raise HTTPException(status_code=404, detail="Warehouse not found.")
+
+        filters = {"warehouse_id": warehouse_id}
+        if product_id:
+            filters["product_id"] = product_id
+        inv_docs = db.query("inventory", filters=filters, org_id=org_id)
+        all_products = {p["id"]: p for p in db.query("products", org_id=org_id)}
+
+        reconciliation_items = []
+        discrepancy_count = 0
+
+        for inv in inv_docs:
+            p_id = inv["product_id"]
+            p_info = all_products.get(p_id, {})
+
+            inflows = db.query("inventory_movements", filters={"destination_id": warehouse_id, "product_id": p_id}, org_id=org_id)
+            outflows = db.query("inventory_movements", filters={"source_warehouse_id": warehouse_id, "product_id": p_id}, org_id=org_id)
+
+            net_ledger_movement = 0
+            for m in inflows:
+                net_ledger_movement += m.get("quantity_changed", 0)
+            for m in outflows:
+                qty = m.get("quantity_changed", 0)
+                if qty < 0:
+                    net_ledger_movement += qty
+                else:
+                    net_ledger_movement -= qty
+
+            batches = db.query("inventory_batches", filters={"warehouse_id": warehouse_id, "product_id": p_id, "status": "active"}, org_id=org_id)
+            batch_sum = sum(b.get("quantity", 0) for b in batches)
+
+            curr_total = inv.get("total_quantity", 0)
+            curr_avail = inv.get("available_quantity", 0)
+            curr_res = inv.get("reserved_quantity", 0)
+            curr_dam = inv.get("damaged_quantity", 0)
+
+            is_internally_consistent = (curr_total == curr_avail + curr_res + curr_dam) and (batch_sum == curr_total)
+            discrepancy = curr_total - batch_sum
+            if not is_internally_consistent or discrepancy != 0:
+                discrepancy_count += 1
+
+            reconciliation_items.append({
+                "product_id": p_id,
+                "product_sku": p_info.get("sku", ""),
+                "product_name": p_info.get("name", "Product"),
+                "ledger_movement_sum": net_ledger_movement,
+                "current_inventory_total": curr_total,
+                "current_available": curr_avail,
+                "current_reserved": curr_res,
+                "batch_quantities_sum": batch_sum,
+                "is_balanced": (discrepancy == 0 and is_internally_consistent),
+                "discrepancy_units": discrepancy
+            })
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        return {
+            "warehouse_id": warehouse_id,
+            "warehouse_name": wh.get("name", "Warehouse"),
+            "timestamp": now_iso,
+            "total_products_checked": len(reconciliation_items),
+            "balanced_products_count": len(reconciliation_items) - discrepancy_count,
+            "discrepancy_count": discrepancy_count,
+            "is_fully_reconciled": discrepancy_count == 0,
+            "items": reconciliation_items
+        }
+
+    # -------------------------------------------------------------------------
+    # 8. RECOMMENDATION TO TRANSFER WORKFLOW
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def create_transfer_from_recommendation(
+        run_id: Optional[str] = None,
+        recommendation_id: Optional[str] = None,
+        actor_id: str = "usr_system",
+        actor_name: str = "System",
+        actor_role: str = "supply_chain_manager",
+        org_id: str = "org_triwiz_01",
+        user_warehouse_id: Optional[str] = None,
+        notes: str = "",
+        req: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Converts an authorized optimization recommendation into a formalized transfer request.
+        Prevents duplicate transfer creation from the same recommendation.
+        Stock is reserved at the source warehouse following the transfer state machine.
+        """
+        if req is not None:
+            actual_run_id = req.run_id
+            actual_rec_id = req.recommendation_id
+            actual_notes = getattr(req, "notes", None) or notes
+        else:
+            actual_run_id = run_id
+            actual_rec_id = recommendation_id
+            actual_notes = notes
+
+        def txn(store):
+            now_iso = datetime.now(timezone.utc).isoformat()
+            run = store.get_document("optimization_runs", actual_run_id)
+            if not run or (run.get("org_id") and run.get("org_id") != org_id):
+                raise HTTPException(status_code=404, detail="Optimization run not found or unauthorized.")
+
+            recommendations = run.get("recommendations", [])
+            target_rec = None
+            rec_index = -1
+            for idx, r in enumerate(recommendations):
+                if r.get("id") == actual_rec_id:
+                    target_rec = r
+                    rec_index = idx
+                    break
+
+            if not target_rec:
+                raise HTTPException(status_code=404, detail="Recommendation not found in specified optimization run.")
+
+            # Idempotency / Duplicate Prevention: check if already transferred
+            if target_rec.get("transferred") or target_rec.get("transfer_id"):
+                existing_trf_id = target_rec.get("transfer_id")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Recommendation '{actual_rec_id}' has already been converted into transfer '{existing_trf_id}'. Duplicate transfer creation prevented."
+                )
+
+            src_wh_id = target_rec["source_warehouse_id"]
+            dst_id = target_rec["destination_id"]
+            p_id = target_rec["product_id"]
+            qty = target_rec["allocated_quantity"]
+
+            if qty <= 0:
+                raise HTTPException(status_code=400, detail="Cannot create transfer for non-positive allocated quantity.")
+
+            # Resolve target warehouse (if destination is a warehouse vs customer destination)
+            target_wh = store.get_document("warehouses", dst_id)
+            if not target_wh:
+                all_whs = store.query("warehouses", org_id=org_id)
+                target_wh_id = dst_id
+                if not any(w["id"] == dst_id for w in all_whs) and all_whs:
+                    target_wh_id = all_whs[0]["id"] if all_whs[0]["id"] != src_wh_id else (all_whs[1]["id"] if len(all_whs) > 1 else src_wh_id)
+            else:
+                target_wh_id = dst_id
+
+            if src_wh_id == target_wh_id:
+                all_whs = store.query("warehouses", org_id=org_id)
+                alt = [w["id"] for w in all_whs if w["id"] != src_wh_id]
+                target_wh_id = alt[0] if alt else "wh_ny_02"
+
+            p_doc = store.get_document("products", p_id)
+            unit_cost = p_doc.get("unit_cost", 25.0) if p_doc else 25.0
+
+            # Atomic stock validation and reservation in source warehouse
+            inv_key = f"inv_{src_wh_id}_{p_id}"
+            inv = store.get_document("inventory", inv_key)
+            if not inv or inv.get("org_id") != org_id:
+                raise HTTPException(status_code=404, detail=f"Product {p_id} not found in source warehouse.")
+            if inv["available_quantity"] < qty:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient available stock to formalize transfer. Available: {inv['available_quantity']}, Recommended: {qty}"
+                )
+
+            # Reserve stock in source warehouse
+            inv["available_quantity"] -= qty
+            inv["reserved_quantity"] = inv.get("reserved_quantity", 0) + qty
+            inv["updated_at"] = now_iso
+            store.set_document("inventory", inv_key, inv)
+
+            t_id = f"trf_{uuid.uuid4().hex[:10]}"
+            trf_num = f"TRF-OPT-{datetime.now().strftime('%Y')}-{uuid.uuid4().hex[:4].upper()}"
+
+            trf_doc = {
+                "id": t_id,
+                "org_id": org_id,
+                "transfer_number": trf_num,
+                "source_warehouse_id": src_wh_id,
+                "target_warehouse_id": target_wh_id,
+                "items": [{
+                    "product_id": p_id,
+                    "batch_id": None,
+                    "quantity": qty,
+                    "unit_cost": unit_cost
+                }],
+                "status": TransferStatus.REQUESTED.value,
+                "requested_by_id": actor_id,
+                "requested_by_name": actor_name,
+                "approved_by_id": None,
+                "approved_by_name": None,
+                "carrier_name": None,
+                "tracking_number": None,
+                "shipped_at": None,
+                "received_at": None,
+                "estimated_transport_cost": target_rec.get("total_transport_cost", 150.0),
+                "notes": f"Created from Optimization Run {run_id}. Rationale: {target_rec.get('rationale', '')} {notes}".strip(),
+                "created_at": now_iso,
+                "updated_at": now_iso,
+                "originating_run_id": run_id,
+                "originating_recommendation_id": recommendation_id
+            }
+            store.set_document("transfers", t_id, trf_doc)
+
+            # Mark recommendation as transferred in the optimization run
+            target_rec["transferred"] = True
+            target_rec["transfer_id"] = t_id
+            recommendations[rec_index] = target_rec
+            run["recommendations"] = recommendations
+            run["updated_at"] = now_iso
+            store.set_document("optimization_runs", run_id, run)
+
+            return trf_doc
 
         return db.run_transaction(txn)

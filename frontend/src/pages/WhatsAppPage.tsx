@@ -218,14 +218,26 @@ export const WhatsAppPage: React.FC = () => {
                   <span className={`w-3 h-3 rounded-full ${
                     bridgeStatus?.status === 'CONNECTED' 
                       ? 'bg-[#0D9488] shadow-md shadow-sm' 
-                      : 'bg-[#17324D]/15 animate-pulse'
+                      : bridgeStatus?.qrString
+                      ? 'bg-amber-400 animate-pulse'
+                      : 'bg-slate-500'
                   }`} />
                   <div>
                     <div className="text-xs font-bold text-slate-900 dark:text-white">
-                      {bridgeStatus?.status === 'CONNECTED' ? 'ONLINE & LINKED' : (bridgeStatus?.status || 'QR_READY')}
+                      {bridgeStatus?.status === 'CONNECTED' 
+                        ? 'ONLINE & LINKED' 
+                        : bridgeStatus?.qrString 
+                        ? 'QR CODE READY' 
+                        : bridgeStatus?.pairingCode 
+                        ? 'PAIRING CODE READY'
+                        : 'STANDBY / OFFLINE'}
                     </div>
                     <div className="text-[10px] text-slate-500 font-mono">
-                      {bridgeStatus?.phone ? `+${bridgeStatus.phone} (${bridgeStatus.name || 'StockPilot Bot'})` : 'Awaiting mobile device connection'}
+                      {bridgeStatus?.phone 
+                        ? `+${bridgeStatus.phone} (${bridgeStatus.name || 'StockPilot Bot'})` 
+                        : bridgeStatus?.qrString 
+                        ? 'Live QR session ready to scan'
+                        : 'Linked Device bridge is in standby mode'}
                     </div>
                   </div>
                 </div>
@@ -235,22 +247,51 @@ export const WhatsAppPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Live QR Code Box */}
-              <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white text-center space-y-3">
-                <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200">
-                  <QRCodeSVG
-                    value={bridgeStatus?.qrString || "2@StockPilotLinkedDeviceAuthToken==,s0m3s3cr3t==,StockPilotHub"}
-                    size={180}
-                    level="M"
-                  />
+              {/* Live QR Code Box / Active / Standby */}
+              {bridgeStatus?.status === 'CONNECTED' ? (
+                <div className="flex flex-col items-center justify-center p-6 border border-emerald-500/20 rounded-2xl bg-emerald-500/5 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                  <div className="text-sm font-black text-emerald-400 uppercase tracking-wider">
+                    WhatsApp Session Active
+                  </div>
+                  <p className="text-[11px] text-slate-400 max-w-xs font-mono">
+                    Connected phone: +{bridgeStatus.phone}
+                  </p>
                 </div>
-                <div className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Scan with WhatsApp on your Phone
+              ) : bridgeStatus?.qrString ? (
+                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white text-center space-y-3">
+                  <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200">
+                    <QRCodeSVG
+                      value={bridgeStatus.qrString}
+                      size={180}
+                      level="M"
+                    />
+                  </div>
+                  <div className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Scan with WhatsApp on your Phone
+                  </div>
+                  <p className="text-[11px] text-slate-500 max-w-xs">
+                    Go to WhatsApp ➔ Settings / Menu (⋮) ➔ <strong>Linked Devices</strong> ➔ <strong>Link a Device</strong>.
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-500 max-w-xs">
-                  Go to WhatsApp ➔ Settings / Menu (⋮) ➔ <strong>Linked Devices</strong> ➔ <strong>Link a Device</strong>.
-                </p>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50 dark:bg-slate-950/40 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                    <QrCode className="w-6 h-6" />
+                  </div>
+                  <div className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    Bridge in Standby Mode
+                  </div>
+                  <p className="text-[11px] text-slate-500 max-w-xs">
+                    Start the WhatsApp Web Linked Device bridge worker or request a pairing code below to link a device:
+                  </p>
+                  <code className="text-[10px] bg-slate-900 text-teal-400 px-2.5 py-1 rounded font-mono border border-slate-800">
+                    node scripts/whatsapp-web-bridge.js
+                  </code>
+                </div>
+              )}
 
               {/* Phone Pairing Code Option */}
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2.5">

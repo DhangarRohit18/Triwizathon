@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
-from fastapi import APIRouter, Request, Query, Header, HTTPException, Depends
+from fastapi import APIRouter, Request, Query, Header, HTTPException, Depends, status
 from pydantic import BaseModel
 from app.core.config import settings
 from app.core.database import db
@@ -10,6 +10,7 @@ from app.core.permissions import (
     PERM_USERS_MANAGE,
     PERM_ALERTS_MANAGE,
     PERM_AUDIT_VIEW,
+    PERM_INTEGRATIONS_MANAGE,
 )
 from app.services.whatsapp_service import WhatsAppBotService
 from app.services.audit_service import AuditService
@@ -74,11 +75,23 @@ def simulate_whatsapp_chat(
     No actual Meta Cloud API calls are made.
     Guards against production identity spoofing when outside explicit development mock mode.
     """
-    # Restrict arbitrary from_number spoofing outside explicit mock testing
-    if not settings.USE_FIREBASE_MOCK and current_user.get("role") != "super_admin":
-        from_number = current_user.get("phone_number") or "+13125550103"
+    if not settings.ALLOW_DEMO_MODE or settings.ENVIRONMENT.lower() in ("production", "prod"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="WhatsApp chat simulation is disabled in production environments."
+        )
+
+    # Restrict arbitrary from_number spoofing: only super_admin can test arbitrary numbers in dev
+    user_phone = current_user.get("phone_number") or current_user.get("phone")
+    if current_user.get("role") != "super_admin":
+        if req.from_number and req.from_number != user_phone:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only super_admin may test arbitrary from_number in simulator mode."
+            )
+        from_number = user_phone or "+13125550103"
     else:
-        from_number = req.from_number or current_user.get("phone_number") or "+13125550103"
+        from_number = req.from_number or user_phone or "+13125550103"
 
     res = WhatsAppBotService.process_incoming_message(
         from_number=from_number,
@@ -222,45 +235,41 @@ class BridgePairRequest(BaseModel):
 def get_whatsapp_bridge_status():
     """
     Returns live WhatsApp Web QR Code and Linked Device status.
-    Reference: Kurukshatra WhatsApp Web Bridge (.baileys_auth/status.json).
+    Reads local .baileys_auth/status.json if present, or reports standby.
     """
     import os
     import json
-    import re
-    from datetime import datetime, timezone
 
     local_status = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../.baileys_auth/status.json"))
-    kurukshatra_status = "C:/Users/user/OneDrive/Desktop/Competition/Kurukshatra/.baileys_auth/status.json"
     
-    target_path = local_status if os.path.exists(local_status) else (kurukshatra_status if os.path.exists(kurukshatra_status) else None)
-    
-    if target_path and os.path.exists(target_path):
+    if os.path.exists(local_status):
         try:
-            with open(target_path, "r", encoding="utf-8") as f:
+            with open(local_status, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return {
                     "is_active": True,
-                    "source": "local" if target_path == local_status else "kurukshatra_reference",
+                    "source": "local",
                     **data
                 }
         except Exception:
             pass
 
     return {
-        "is_active": True,
-        "status": "QR_READY",
-        "message": "StockPilot WhatsApp Web Linked Device QR is active and ready to link.",
-        "qrString": "2@StockPilotLinkedDeviceAuthToken==,s0m3s3cr3t==,StockPilotHub",
+        "is_active": False,
+        "status": "STANDBY",
+        "message": "WhatsApp Linked Device bridge is in standby mode.",
+        "qrString": None,
         "qrDataUrl": None,
-        "phone": "919975819201",
-        "name": "Elena Rostova (Supply Chain Operations)",
-        "source": "default_standby"
+        "source": "standby"
     }
 
 
 @router.post("/bridge/pair", summary="Request pairing code for mobile phone number")
-def request_bridge_pairing_code(req: BridgePairRequest):
-    """Generates an 8-digit WhatsApp Linked Device Pairing Code for telephone registration."""
+def request_bridge_pairing_code(
+    req: BridgePairRequest,
+    current_user: dict = Depends(require_permission(PERM_INTEGRATIONS_MANAGE))
+):
+    """Generates an 8-digit WhatsApp Linked Device Pairing Code for telephone registration. Requires PERM_INTEGRATIONS_MANAGE."""
     import os
     import json
     import re
@@ -299,21 +308,37 @@ class BridgeIncomingRequest(BaseModel):
     from_number: str
     message_text: str
     user_name: Optional[str] = None
+    sender_lid: Optional[str] = None
     org_id: Optional[str] = "org_triwiz_01"
+    is_lid: Optional[bool] = False
 
 
 @router.post("/bridge/incoming", summary="Process live incoming WhatsApp message from Baileys Bridge")
-def handle_bridge_incoming_message(req: BridgeIncomingRequest):
+def handle_bridge_incoming_message(
+    req: BridgeIncomingRequest,
+    x_bridge_key: Optional[str] = Header(None, alias="X-Bridge-Key")
+):
     """
     Direct endpoint for live mobile WhatsApp messages relayed through the WhatsApp Web Linked Device Bridge.
+    Requires verified X-Bridge-Key header matching BRIDGE_API_SECRET.
     Processes the inquiry using live inventory, real RBAC roles, and deterministic NLP.
     """
+    if not x_bridge_key or x_bridge_key != settings.BRIDGE_API_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Bridge-Key header"
+        )
+
     res = WhatsAppBotService.process_incoming_message(
         from_number=req.from_number,
         message_text=req.message_text,
+        user_name=req.user_name,
+        sender_lid=req.sender_lid,
+        is_lid=bool(req.is_lid),
         org_id=req.org_id or "org_triwiz_01",
         is_simulated=False,
     )
     return res
+
 
 

@@ -184,6 +184,7 @@ class InventoryMovement(BaseModel):
     movement_type: MovementType
     quantity_changed: int
     unit: str = "units"
+    balance_before: Optional[int] = None
     balance_after: int
     actor_id: str
     actor_name: str
@@ -385,9 +386,38 @@ class AllocationRecommendation(BaseModel):
     baseline_allocated_quantity: Optional[int] = None
     baseline_transport_cost: Optional[float] = None
     baseline_savings_amount: Optional[float] = None
+    transferred: Optional[bool] = False
+    transfer_id: Optional[str] = None
     model_version: str = "ortools-scip-v2.1"
     data_version: str = "seed-triwiz-2026"
     alternative_options: List[Dict[str, Any]] = []
+
+class TransferFromRecommendationRequest(BaseModel):
+    run_id: str
+    recommendation_id: str
+    notes: Optional[str] = ""
+
+class ReconciliationItem(BaseModel):
+    product_id: str
+    product_sku: str
+    product_name: str
+    ledger_movement_sum: int
+    current_inventory_total: int
+    current_available: int
+    current_reserved: int
+    batch_quantities_sum: int
+    is_balanced: bool
+    discrepancy_units: int
+
+class InventoryReconciliationResult(BaseModel):
+    warehouse_id: str
+    warehouse_name: str
+    timestamp: str
+    total_products_checked: int
+    balanced_products_count: int
+    discrepancy_count: int
+    is_fully_reconciled: bool
+    items: List[ReconciliationItem]
 
 class OptimizationSummary(BaseModel):
     total_modeled_cost: float
@@ -403,11 +433,14 @@ class OptimizationSummary(BaseModel):
     solver_status: str
     solver_name: str  # "OR-Tools SCIP MIP" or "Greedy Baseline Heuristic"
     hard_constraints_enforced: bool = True
+    objective_value: Optional[float] = None
 
 class OptimizationResult(BaseModel):
     run_id: str
+    org_id: Optional[str] = "org_triwiz_01"
     timestamp: str
     parameters: OptimizationRunRequest
+    input_snapshot: Optional[Dict[str, Any]] = None
     optimized: OptimizationSummary
     baseline_heuristic: OptimizationSummary
     recommendations: List[AllocationRecommendation]
@@ -440,6 +473,11 @@ class ForecastEvaluation(BaseModel):
     horizon_days: int
     holdout_sample_size: int
     data_provenance: str = "calibrated_synthetic_historical_series"
+    history_days: Optional[int] = None
+    history_start_date: Optional[str] = None
+    history_end_date: Optional[str] = None
+    limitations: Optional[str] = None
+    insufficient_history: Optional[bool] = False
 
 class ProductForecastResult(BaseModel):
     product_id: str
@@ -449,6 +487,9 @@ class ProductForecastResult(BaseModel):
     timeline: List[ForecastDataPoint]
     model_version: str = "scikit-ridge-v1.2"
     data_version: str = "seed-triwiz-2026"
+    created_at: Optional[str] = None
+    status: Optional[str] = "success"
+    message: Optional[str] = None
 
 # -------------------------------------------------------------
 # IoT Telemetry Models

@@ -157,6 +157,21 @@ class DistributionOptimizerEngine:
                     )
                     cost_matrix[(wh["id"], d["id"], p["id"])] = cost
 
+        # Snapshot of input state and parameters
+        input_snapshot = {
+            "warehouse_count": len(warehouses),
+            "destination_count": len(destinations),
+            "product_count": len(products),
+            "total_available_stock_units": sum(stock_matrix.values()),
+            "total_demand_units": sum(demand_matrix.values()),
+            "disrupted_warehouses": scenario.disrupted_warehouse_ids,
+            "demand_surge_percent": scenario.demand_surge_percent,
+            "fuel_multiplier": scenario.fuel_transport_cost_multiplier,
+            "fefo_penalty_multiplier": scenario.expiring_soon_penalty_multiplier,
+            "horizon_days": req.horizon_days,
+            "timestamp": now_iso
+        }
+
         # 5. Solve via Google OR-Tools SCIP MIP Solver
         start_time = time.perf_counter()
         solver = pywraplp.Solver.CreateSolver('SCIP')
@@ -345,7 +360,8 @@ class DistributionOptimizerEngine:
             execution_time_ms=1.2,
             solver_status="COMPLETED",
             solver_name="Greedy Nearest-Warehouse Heuristic",
-            hard_constraints_enforced=True
+            hard_constraints_enforced=True,
+            objective_value=base_modeled_cost
         )
 
         # 7. Check Infeasibility & Build Recommendations
@@ -373,12 +389,15 @@ class DistributionOptimizerEngine:
                 execution_time_ms=exec_time_ms,
                 solver_status="INFEASIBLE",
                 solver_name="OR-Tools SCIP MIP Solver",
-                hard_constraints_enforced=True
+                hard_constraints_enforced=True,
+                objective_value=None
             )
             return OptimizationResult(
                 run_id=run_id,
+                org_id=org_id,
                 timestamp=now_iso,
                 parameters=req,
+                input_snapshot=input_snapshot,
                 optimized=opt_summary,
                 baseline_heuristic=baseline_summary,
                 recommendations=[],
@@ -497,7 +516,8 @@ class DistributionOptimizerEngine:
             execution_time_ms=exec_time_ms,
             solver_status="OPTIMAL" if is_optimal else "FEASIBLE",
             solver_name="OR-Tools SCIP MIP Solver",
-            hard_constraints_enforced=True
+            hard_constraints_enforced=True,
+            objective_value=round(solver.Objective().Value(), 2)
         )
 
         savings_amount = max(0.0, round(base_modeled_cost - opt_modeled_cost, 2))
@@ -505,8 +525,10 @@ class DistributionOptimizerEngine:
 
         result = OptimizationResult(
             run_id=run_id,
+            org_id=org_id,
             timestamp=now_iso,
             parameters=req,
+            input_snapshot=input_snapshot,
             optimized=opt_summary,
             baseline_heuristic=baseline_summary,
             recommendations=recommendations,

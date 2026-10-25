@@ -16,7 +16,7 @@ class StockPilotApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark, // Default to industrial dark theme
+      themeMode: ThemeMode.light, // Clean, light enterprise interface
       routerConfig: router,
     );
   }

@@ -142,6 +142,8 @@ export interface AllocationRecommendation {
   expiry_risk_score: number;
   stockout_risk_after: number;
   rationale: string;
+  transferred?: boolean;
+  transfer_id?: string;
   alternative_options?: Array<{ warehouse_name: string; distance_km: number; unit_cost: number }>;
 }
 
@@ -158,16 +160,20 @@ export interface OptimizationSummary {
   execution_time_ms: number;
   solver_status: string;
   solver_name: string;
+  objective_value?: number;
 }
 
 export interface OptimizationResult {
   run_id: string;
   timestamp: string;
+  input_snapshot?: Record<string, any>;
   optimized: OptimizationSummary;
   baseline_heuristic: OptimizationSummary;
   recommendations: AllocationRecommendation[];
   savings_amount: number;
   savings_percent: number;
+  hard_constraints_satisfied?: boolean;
+  diagnostic_messages?: string[];
 }
 
 export interface IoTDevice {
@@ -180,6 +186,9 @@ export interface IoTDevice {
   ip_address: string;
   last_ping: string;
   is_online: boolean;
+  connectivity_status?: 'online' | 'stale' | 'offline';
+  data_freshness_seconds?: number;
+  last_seen_text?: string;
   firmware_version: string;
   temp_min_threshold: number;
   temp_max_threshold: number;
@@ -197,6 +206,8 @@ export interface SensorReading {
   humidity_percent: number;
   battery_level_percent: number;
   door_open: boolean;
+  is_simulated?: boolean;
+  data_source?: string;
 }
 
 export interface IoTAlert {
@@ -210,6 +221,9 @@ export interface IoTAlert {
   timestamp: string;
   acknowledged: boolean;
   acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  is_simulated?: boolean;
+  data_source?: string;
 }
 
 export interface Transfer {
@@ -221,7 +235,8 @@ export interface Transfer {
   target_warehouse_name: string;
   items: Array<{ product_id: string; product_name: string; product_sku: string; quantity: number }>;
   status: 'pending' | 'approved' | 'in_transit' | 'received' | 'rejected';
-  requested_by_name: string;
+  requested_by_name?: string;
+  requested_by?: string;
   approved_by_name?: string | null;
   estimated_transport_cost: number;
   notes?: string;

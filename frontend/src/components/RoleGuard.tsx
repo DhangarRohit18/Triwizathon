@@ -22,33 +22,13 @@ const ROLE_DISPLAY_NAMES: Record<RoleType, string> = {
 };
 
 export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRoles }) => {
-  const { activeRole, setActiveRole, setUser, addToast } = useAppStore();
+  const { activeRole } = useAppStore();
 
   if (!allowedRoles || allowedRoles.length === 0 || allowedRoles.includes(activeRole)) {
     return <>{children}</>;
   }
 
   const recommendedRole = allowedRoles[0];
-
-  const handleElevate = async () => {
-    try {
-      const res = await api.auth.switchRole(recommendedRole);
-      setUser(res.user, res.access_token);
-      setActiveRole(recommendedRole);
-      addToast({
-        type: 'success',
-        title: `Access Granted: Elevated to ${ROLE_DISPLAY_NAMES[recommendedRole]}`,
-        message: 'Your workstation permissions have been elevated for this module.',
-      });
-    } catch (e: any) {
-      setActiveRole(recommendedRole);
-      addToast({
-        type: 'info',
-        title: `Switched Role to ${ROLE_DISPLAY_NAMES[recommendedRole]}`,
-        message: 'Operating session updated.',
-      });
-    }
-  };
 
   return (
     <div className="max-w-3xl mx-auto my-12 p-8 rounded-2xl bg-white border border-[#17324D]/15 text-[#17324D] font-sans">
@@ -96,14 +76,17 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRoles }) 
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-3 pt-6 border-t border-[#17324D]/10">
-        <TactileButton variant="primary" onClick={handleElevate} className="w-full sm:w-auto">
-          Elevate to {ROLE_DISPLAY_NAMES[recommendedRole]}
-        </TactileButton>
-
         <Link to="/login" className="w-full sm:w-auto">
-          <TactileButton variant="outline" className="w-full">
+          <TactileButton variant="primary" className="w-full sm:w-auto">
             <LogIn className="w-4 h-4 mr-2" />
-            Switch Account / All Roles
+            Sign In with Authorized Account
+          </TactileButton>
+        </Link>
+
+        <Link to="/" className="w-full sm:w-auto">
+          <TactileButton variant="outline" className="w-full">
+            <ArrowRight className="w-4 h-4 mr-2" />
+            Return to Dashboard
           </TactileButton>
         </Link>
       </div>

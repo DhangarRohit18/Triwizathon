@@ -224,7 +224,7 @@ def resolve_qr_code(
     total_avail = sum(i["available_quantity"] for i in inv_items)
 
     first_batch = active_batches[0] if active_batches else None
-    first_wh = inv_items[0]["warehouse_id"] if inv_items else "wh_chicago_01"
+    first_wh = inv_items[0]["warehouse_id"] if inv_items else None
 
     return {
         "resolved_type": "product",
@@ -238,7 +238,7 @@ def resolve_qr_code(
         "unit": matched_prd["unit"],
         "unit_cost": matched_prd["unit_cost"],
         "warehouse_id": first_wh,
-        "batch_number": first_batch["batch_number"] if first_batch else f"LOT-{matched_prd['sku']}-01",
+        "batch_number": first_batch["batch_number"] if first_batch else None,
         "batch_id": first_batch["id"] if first_batch else None,
         "current_stock": total_avail,
         "total_available": total_avail,

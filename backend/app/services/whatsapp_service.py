@@ -104,39 +104,45 @@ class WhatsAppBotService:
     # =========================================================================
 
     @classmethod
-    def _resolve_sender(cls, from_number: str, org_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def _resolve_sender(
+        cls,
+        from_number: str,
+        org_id: Optional[str] = None,
+        sender_lid: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
-        Look up authorized user by normalized phone number, whatsapp aliases,
+        Look up authorized user by normalized phone number, whatsapp aliases, sender LID,
         or last 10 core digits across tenant or cross-org for Super Admins.
         """
+        users = db.query("users")
+
+        # 0. Check sender_lid in whatsapp_aliases first
+        if sender_lid:
+            norm_lid = cls._normalize_phone(sender_lid)
+            for u in users:
+                aliases = [cls._normalize_phone(str(a)) for a in u.get("whatsapp_aliases", [])]
+                if norm_lid in aliases or sender_lid in aliases or str(sender_lid) in u.get("whatsapp_aliases", []):
+                    if not org_id or u.get("role") == ROLE_SUPER_ADMIN or u.get("org_id") == org_id:
+                        return u
+
         normalized_from = cls._normalize_phone(from_number)
         if not normalized_from:
             return None
         e164_from = cls.format_e164(from_number)
-        users = db.query("users")
 
-        # 1. Exact phone number match within tenant
+        # 1. Exact phone number match within tenant or alias match (strictly avoid ambiguous last-ten-digit matching)
         for u in users:
             stored_raw = u.get("phone_number") or ""
             stored_norm = cls._normalize_phone(stored_raw)
-            if stored_norm and (stored_norm == normalized_from or stored_raw == e164_from):
+            stored_e164 = cls.format_e164(stored_raw)
+            if stored_norm and (stored_norm == normalized_from or stored_raw == e164_from or stored_e164 == e164_from):
                 if not org_id or u.get("role") == ROLE_SUPER_ADMIN or u.get("org_id") == org_id:
                     return u
-            # Also check alternative aliases (e.g. WhatsApp LID or raw phone format)
+            # Check explicit verified aliases (e.g. WhatsApp LID or pre-verified secondary numbers)
             aliases = [cls._normalize_phone(str(a)) for a in u.get("whatsapp_aliases", [])]
-            if normalized_from in aliases:
+            if normalized_from in aliases or str(from_number) in u.get("whatsapp_aliases", []):
                 if not org_id or u.get("role") == ROLE_SUPER_ADMIN or u.get("org_id") == org_id:
                     return u
-
-        # 2. Match on core 10 digits (ignoring country code prefixes like +91 / 91 / 0)
-        if len(normalized_from) >= 10:
-            last10 = normalized_from[-10:]
-            for u in users:
-                stored_raw = u.get("phone_number") or ""
-                stored_norm = cls._normalize_phone(stored_raw)
-                if len(stored_norm) >= 10 and stored_norm[-10:] == last10:
-                    if not org_id or u.get("role") == ROLE_SUPER_ADMIN or u.get("org_id") == org_id:
-                        return u
 
         return None
 
@@ -155,23 +161,41 @@ class WhatsAppBotService:
     def verify_meta_signature(payload_bytes: bytes, signature_header: Optional[str]) -> bool:
         """
         Validates X-Hub-Signature-256 HMAC-SHA256.
-        If WHATSAPP_APP_SECRET is configured, signature is MANDATORY.
-        In simulator mode (no secret configured), validation is bypassed.
+        Security requirements:
+        - In production, signature verification is strictly required and fails closed if
+          WHATSAPP_APP_SECRET is missing or set to a mock default.
+        - When a signature header is provided, it is always verified against the configured secret.
         """
-        if not settings.WHATSAPP_APP_SECRET or settings.WHATSAPP_APP_SECRET.startswith("mock_"):
-            return True  # simulator / dev mode
-        if not signature_header:
-            return False  # secret is set but header is absent -> reject
-        try:
-            expected_hash = hmac.new(
-                settings.WHATSAPP_APP_SECRET.encode("utf-8"),
-                payload_bytes,
-                hashlib.sha256
-            ).hexdigest()
-            incoming_hash = signature_header.replace("sha256=", "")
-            return hmac.compare_digest(expected_hash, incoming_hash)
-        except Exception:
-            return False
+        is_production = settings.ENVIRONMENT.lower() in ("production", "prod")
+
+        # 1. Production must fail closed if secrets are missing or mock
+        if is_production:
+            if not settings.WHATSAPP_APP_SECRET or settings.WHATSAPP_APP_SECRET.startswith("mock_"):
+                return False  # fail closed in production
+            if not signature_header:
+                return False  # missing required signature header in production
+
+        # 2. When signature header is provided, strictly evaluate HMAC-SHA256
+        if signature_header:
+            if not settings.WHATSAPP_APP_SECRET:
+                return False
+            try:
+                expected_hash = hmac.new(
+                    settings.WHATSAPP_APP_SECRET.encode("utf-8"),
+                    payload_bytes,
+                    hashlib.sha256
+                ).hexdigest()
+                incoming_hash = signature_header.replace("sha256=", "").strip()
+                return hmac.compare_digest(expected_hash, incoming_hash)
+            except Exception:
+                return False
+
+        # 3. No signature header passed outside production
+        if settings.WHATSAPP_APP_SECRET and not settings.WHATSAPP_APP_SECRET.startswith("mock_"):
+            return False  # Real secret is set, header is mandatory
+
+        # Only allow unauthenticated payload in non-production dev/simulator mode without secret
+        return True
 
     @classmethod
     def handle_webhook_payload(cls, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -572,9 +596,10 @@ class WhatsAppBotService:
         matched_inv = None
         for inv in all_invs:
             inv_phone_norm = cls._normalize_phone(inv.get("phone_number", ""))
+            inv_e164 = cls.format_e164(inv.get("phone_number", ""))
             if (inv.get("phone_number") == e164_phone or
-                inv_phone_norm == normalized_from or
-                (len(normalized_from) >= 10 and inv_phone_norm[-10:] == normalized_from[-10:])):
+                inv_e164 == e164_phone or
+                inv_phone_norm == normalized_from):
                 if inv.get("status") == "pending":
                     matched_inv = inv
                     break
@@ -858,6 +883,20 @@ class WhatsAppBotService:
         # Cross-org protection
         if admin_role != ROLE_SUPER_ADMIN and target_user.get("org_id") != admin_user.get("org_id"):
             return "⛔ Cross-organization role modification denied."
+
+        # Self-elevation protection: Users cannot elevate their own role
+        if target_user["id"] == admin_user["id"] and norm_role != admin_user.get("role"):
+            AuditService.log_event(
+                org_id=org_id,
+                actor_id=admin_user["id"],
+                actor_name=admin_user.get("full_name", "Admin"),
+                actor_role=admin_role,
+                action="UNAUTHORIZED_SELF_PROMOTION_ATTEMPT",
+                target_entity="user",
+                entity_id=target_user["id"],
+                details={"requested_role": norm_role, "current_role": admin_role}
+            )
+            return "⛔ Self-Elevation Denied: Users cannot modify or elevate their own role. Role modifications must be performed by a separate authorized administrator."
 
         old_role = target_user.get("role", ROLE_OPERATOR)
         old_role_display = cls.ROLE_DISPLAY_NAMES.get(old_role, old_role)
@@ -1278,6 +1317,9 @@ class WhatsAppBotService:
         cls,
         from_number: str,
         message_text: str,
+        user_name: Optional[str] = None,
+        sender_lid: Optional[str] = None,
+        is_lid: bool = False,
         org_id: str = "org_triwiz_01",
         is_simulated: bool = False,
     ) -> Dict[str, Any]:
@@ -1294,7 +1336,7 @@ class WhatsAppBotService:
         e164_from = cls.format_e164(from_number)
 
         # 1. Resolve registered sender
-        matched_user = cls._resolve_sender(from_number, org_id)
+        matched_user = cls._resolve_sender(from_number, org_id, sender_lid=sender_lid)
 
         # ---------------------------------------------------------------------
         # Consent Management (Accessible to registered and unregistered numbers)
@@ -1321,6 +1363,110 @@ class WhatsAppBotService:
             return cls._log_and_return(
                 org_id, from_number, message_text, reply,
                 "CONSENT_OPT_IN", matched_user, now_iso, is_simulated, lang_info["label"]
+            )
+
+        # ---------------------------------------------------------------------
+        # Self-Service Account Linking (LINK <phone> [name])
+        # Allows operators or staff to link their WhatsApp directly to their real mobile number
+        # ---------------------------------------------------------------------
+        if first_token == "LINK":
+            is_prod = settings.ENVIRONMENT.lower() in ("production", "prod")
+            if is_prod or not settings.ALLOW_DEMO_MODE:
+                reply = (
+                    "⛔ *Security Notice*: Unauthenticated account linking via caller-supplied phone numbers is disabled in production. "
+                    "Please request a registration invitation from your administrator and reply: *CONFIRM <code>*."
+                )
+                action_taken = "LINK_DISABLED_IN_PRODUCTION"
+            elif len(tokens) < 2:
+                reply = (
+                    "📲 *StockPilot AI Account Linking*\n\n"
+                    "Please provide your mobile number in standard format.\n"
+                    "• *Usage*: LINK <mobile_number>\n"
+                    "• _Example_: LINK +919975819201"
+                )
+                action_taken = "LINK_SYNTAX_ERROR"
+            else:
+                raw_input = tokens[1].strip()
+                if not cls.is_valid_phone(raw_input):
+                    reply = "⛔ Please provide a valid mobile number (10-15 digits with country code)."
+                    action_taken = "LINK_INVALID_PHONE"
+                else:
+                    target_e164 = cls.format_e164(raw_input)
+                    target_norm = cls._normalize_phone(raw_input)
+
+                    # Look up user by exact normalized phone (strictly avoid ambiguous suffix matching)
+                    users = db.query("users")
+                    target = None
+                    for u in users:
+                        u_phone = u.get("phone_number") or ""
+                        u_norm = cls._normalize_phone(u_phone)
+                        u_e164 = cls.format_e164(u_phone)
+                        if u_norm == target_norm or u_e164 == target_e164 or u_phone == target_e164:
+                            target = u
+                            break
+
+                    # Security safeguard: Prevent taking over privileged accounts via self-service LINK
+                    if target and target.get("role") in (ROLE_SUPER_ADMIN, ROLE_ORG_ADMIN, ROLE_SUPPLY_CHAIN_MANAGER):
+                        AuditService.log_event(
+                            org_id=target.get("org_id", org_id),
+                            actor_id=f"unregistered_{cls._normalize_phone(from_number)}",
+                            actor_name="Unknown Caller",
+                            actor_role="unauthorized",
+                            action="UNAUTHORIZED_PRIVILEGED_LINK_ATTEMPT",
+                            target_entity="user",
+                            entity_id=target["id"],
+                            details={"target_phone": target_e164, "caller_from": from_number}
+                        )
+                        reply = "⛔ Security Error: Privileged administrator or manager accounts cannot be linked via self-service. Contact your organization administrator for an invitation challenge code."
+                        action_taken = "LINK_PRIVILEGED_REJECTED"
+                    else:
+                        new_aliases = [target_norm, from_number]
+                        if sender_lid:
+                            new_aliases.append(sender_lid)
+
+                        if target:
+                            existing_aliases = target.get("whatsapp_aliases") or []
+                            for a in new_aliases:
+                                if a and str(a) not in existing_aliases:
+                                    existing_aliases.append(str(a))
+                            target["whatsapp_aliases"] = existing_aliases
+                            target["whatsapp_opted_in"] = True
+                            target["updated_at"] = now_iso
+                            db.set_document("users", target["id"], target)
+                            matched_user = target
+                        else:
+                            short_id = target_norm[-8:]
+                            new_id = f"usr_{short_id}"
+                            target = {
+                                "id": new_id,
+                                "org_id": org_id,
+                                "email": f"operator_{short_id}@stockpilot.ai",
+                                "full_name": user_name or f"Warehouse Operator ({target_e164})",
+                                "role": ROLE_OPERATOR,
+                                "phone_number": target_e164,
+                                "whatsapp_aliases": list(set(a for a in new_aliases if a)),
+                                "whatsapp_opted_in": True,
+                                "is_active": True,
+                                "created_at": now_iso,
+                                "updated_at": now_iso
+                            }
+                            db.set_document("users", new_id, target)
+                            matched_user = target
+
+                        r_name = cls.ROLE_DISPLAY_NAMES.get(matched_user.get("role", "operator"), "Operator")
+                        reply = (
+                            f"✅ *WhatsApp Account Linked Successfully!*\n\n"
+                            f"Welcome, *{matched_user.get('full_name')}*!\n"
+                            f"• Mobile: *{matched_user.get('phone_number')}*\n"
+                            f"• Role: *{r_name}*\n"
+                            f"• Account Status: *Active*\n\n"
+                            f"Reply *HELP* to see available commands or *STOCK PRD-VAX-01* to check inventory."
+                        )
+                        action_taken = "ACCOUNT_LINKED"
+
+            return cls._log_and_return(
+                org_id, from_number, message_text, reply,
+                action_taken, matched_user, now_iso, is_simulated, lang_info["label"]
             )
 
         # ---------------------------------------------------------------------
@@ -1373,9 +1519,24 @@ class WhatsAppBotService:
         # Unregistered Sender Security Rejection
         # ---------------------------------------------------------------------
         if not matched_user:
-            # Check if system has no bootstrap completed
-            boot_state = db.get_document("admin_bootstrap_state", "bootstrap_status")
-            if not boot_state or not boot_state.get("is_bootstrapped"):
+            clean_digits = re.sub(r"\D", "", from_number)
+            is_unmapped_lid = is_lid or len(clean_digits) >= 14
+
+            current_boot = db.get_document("admin_bootstrap_state", "bootstrap_status")
+            is_bootstrapped = bool(current_boot and current_boot.get("is_bootstrapped"))
+
+            if is_unmapped_lid:
+                # Do NOT show fake/random LID numbers like +18472906051759
+                name_greeting = f"Hello *{user_name}*!" if user_name and user_name != "Warehouse Operator" else "Hello!"
+                reply = (
+                    f"⛔ *Security Notice*: {name_greeting}\n\n"
+                    f"Your WhatsApp account is not registered with StockPilot AI.\n\n"
+                    f"📲 *To link your WhatsApp to your real mobile number, reply:*\n"
+                    f"*LINK <your_10_digit_mobile>*\n"
+                    f"_Example: LINK 9975819201_\n\n"
+                    f"Once linked, you can query live inventory, track transfers, and manage cold-chain alerts."
+                )
+            elif not is_bootstrapped:
                 reply = (
                     f"⛔ *Security Notice*: Mobile number *{e164_from}* is not registered with StockPilot AI.\n\n"
                     f"Initial administrator setup is required. The system administrator must complete enrollment "
@@ -1384,17 +1545,18 @@ class WhatsAppBotService:
             else:
                 reply = (
                     f"⛔ *Security Notice*: Mobile number *{e164_from}* is not registered with StockPilot AI. "
-                    f"Contact your organization administrator for access."
+                    f"Contact your organization administrator for access, or reply *LINK <mobile>* to connect your profile."
                 )
+
             AuditService.log_event(
                 org_id=org_id,
                 actor_id=f"unregistered_{cls._normalize_phone(e164_from)}",
-                actor_name="Unregistered Caller",
+                actor_name=user_name or "Unregistered Caller",
                 actor_role="unauthorized",
                 action="UNAUTHORIZED_SENDER_MESSAGE",
                 target_entity="whatsapp_gateway",
                 entity_id=e164_from,
-                details={"message": clean_text[:64]}
+                details={"message": clean_text[:64], "is_lid": is_unmapped_lid}
             )
             cls._log_and_return(
                 org_id, from_number, message_text, reply,
@@ -1701,7 +1863,10 @@ class WhatsAppBotService:
         # Command: ALERTS
         # ---------------------------------------------------------------------
         elif cmd_upper == "ALERTS":
+            user_whs = matched_user.get("warehouse_ids") or ([matched_user.get("warehouse_id")] if matched_user.get("warehouse_id") else [])
             alerts = db.query("alerts", filters={"acknowledged": False}, org_id=org_id)
+            if user_role == ROLE_WAREHOUSE_MANAGER and user_whs:
+                alerts = [a for a in alerts if a.get("warehouse_id") in user_whs]
             if not alerts:
                 reply = "All clear. No unacknowledged IoT cold-chain alerts."
             else:
@@ -1717,24 +1882,56 @@ class WhatsAppBotService:
                 reply = f"Unauthorized: role '{user_role}' cannot approve transfers."
                 action_taken = "TRANSFER_APPROVAL_UNAUTHORIZED"
             else:
-                parts = cmd_upper.split()
+                parts = clean_text.split()
                 if len(parts) < 2:
                     reply = "Please specify Transfer ID. Example: APPROVE trf_001"
+                    action_taken = "TRANSFER_APPROVAL_SYNTAX_ERROR"
                 else:
                     trf_id = parts[1].strip()
-                    try:
-                        InventoryService.approve_or_reject_transfer(
-                            transfer_id=trf_id, approved=True,
-                            actor_id=matched_user["id"], actor_name=user_name,
-                            actor_role=user_role, user_warehouse_id=matched_user.get("warehouse_id"),
-                            org_id=org_id, notes="Approved via authenticated WhatsApp")
-                        deep_link = f"https://app.stockpilot.ai/transfers?id={trf_id}"
-                        reply = f"Transfer {trf_id} Approved. Status: IN_TRANSIT.\nDetails: {deep_link}"
-                        action_taken = "TRANSFER_APPROVED"
-                    except HTTPException as e:
-                        reply = f"Error: {e.detail}"
-                    except Exception as e:
-                        reply = f"Error approving transfer: {str(e)}"
+                    # 1. Verify actual transfer exists in database
+                    transfer = db.get_document("transfers", trf_id)
+                    if not transfer:
+                        all_trfs = db.query("transfers", org_id=org_id)
+                        transfer = next((t for t in all_trfs if t["id"].lower() == trf_id.lower() or t.get("transfer_number", "").lower() == trf_id.lower()), None)
+
+                    if not transfer:
+                        reply = f"Error: Transfer '{trf_id}' not found."
+                        action_taken = "TRANSFER_NOT_FOUND"
+                    elif user_role != ROLE_SUPER_ADMIN and transfer.get("org_id") != org_id:
+                        reply = f"Unauthorized: Transfer '{trf_id}' does not belong to your organization."
+                        action_taken = "TRANSFER_UNAUTHORIZED_ORG"
+                    else:
+                        actual_trf_id = transfer["id"]
+                        src_wh = transfer.get("source_warehouse_id")
+                        dst_wh = transfer.get("target_warehouse_id")
+                        user_whs = matched_user.get("warehouse_ids") or ([matched_user.get("warehouse_id")] if matched_user.get("warehouse_id") else [])
+
+                        # 2. Check facility scope for warehouse managers
+                        if user_role == ROLE_WAREHOUSE_MANAGER and user_whs and src_wh not in user_whs and dst_wh not in user_whs:
+                            reply = f"Unauthorized: Warehouse Manager cannot approve transfer outside assigned facility ({', '.join(user_whs)})."
+                            action_taken = "TRANSFER_WAREHOUSE_UNAUTHORIZED"
+                        else:
+                            # 3. Check current transfer state
+                            curr_status = (transfer.get("status") or "").lower()
+                            if curr_status not in ("requested", "pending"):
+                                reply = f"Error: Transfer {actual_trf_id} has already been approved / processed (current status: {curr_status.upper()})."
+                                action_taken = "TRANSFER_ALREADY_PROCESSED"
+                            else:
+                                try:
+                                    InventoryService.approve_or_reject_transfer(
+                                        transfer_id=actual_trf_id, approved=True,
+                                        actor_id=matched_user["id"], actor_name=user_name,
+                                        actor_role=user_role, user_warehouse_id=matched_user.get("warehouse_id"),
+                                        org_id=org_id, notes="Approved via authenticated WhatsApp")
+                                    deep_link = f"https://app.stockpilot.ai/transfers?id={actual_trf_id}"
+                                    reply = f"Transfer {actual_trf_id} Approved. Status: IN_TRANSIT.\nDetails: {deep_link}"
+                                    action_taken = "TRANSFER_APPROVED"
+                                except HTTPException as e:
+                                    reply = f"Error: {e.detail}"
+                                    action_taken = "TRANSFER_APPROVAL_ERROR"
+                                except Exception as e:
+                                    reply = f"Error approving transfer: {str(e)}"
+                                    action_taken = "TRANSFER_APPROVAL_ERROR"
 
         # ---------------------------------------------------------------------
         # Command: REJECT <TRF_ID>
@@ -1744,23 +1941,52 @@ class WhatsAppBotService:
                 reply = f"Unauthorized: role '{user_role}' cannot reject transfers."
                 action_taken = "TRANSFER_REJECTION_UNAUTHORIZED"
             else:
-                parts = cmd_upper.split()
+                parts = clean_text.split()
                 if len(parts) < 2:
                     reply = "Please specify Transfer ID. Example: REJECT trf_001"
+                    action_taken = "TRANSFER_REJECTION_SYNTAX_ERROR"
                 else:
                     trf_id = parts[1].strip()
-                    try:
-                        InventoryService.approve_or_reject_transfer(
-                            transfer_id=trf_id, approved=False,
-                            actor_id=matched_user["id"], actor_name=user_name,
-                            actor_role=user_role, user_warehouse_id=matched_user.get("warehouse_id"),
-                            org_id=org_id, notes="Rejected via WhatsApp")
-                        reply = f"Transfer {trf_id} has been Rejected."
-                        action_taken = "TRANSFER_REJECTED"
-                    except HTTPException as e:
-                        reply = f"Error: {e.detail}"
-                    except Exception as e:
-                        reply = f"Error rejecting transfer: {str(e)}"
+                    transfer = db.get_document("transfers", trf_id)
+                    if not transfer:
+                        all_trfs = db.query("transfers", org_id=org_id)
+                        transfer = next((t for t in all_trfs if t["id"].lower() == trf_id.lower() or t.get("transfer_number", "").lower() == trf_id.lower()), None)
+
+                    if not transfer:
+                        reply = f"Error: Transfer '{trf_id}' not found."
+                        action_taken = "TRANSFER_NOT_FOUND"
+                    elif user_role != ROLE_SUPER_ADMIN and transfer.get("org_id") != org_id:
+                        reply = f"Unauthorized: Transfer '{trf_id}' does not belong to your organization."
+                        action_taken = "TRANSFER_UNAUTHORIZED_ORG"
+                    else:
+                        actual_trf_id = transfer["id"]
+                        src_wh = transfer.get("source_warehouse_id")
+                        dst_wh = transfer.get("target_warehouse_id")
+                        user_whs = matched_user.get("warehouse_ids") or ([matched_user.get("warehouse_id")] if matched_user.get("warehouse_id") else [])
+
+                        if user_role == ROLE_WAREHOUSE_MANAGER and user_whs and src_wh not in user_whs and dst_wh not in user_whs:
+                            reply = f"Unauthorized: Warehouse Manager cannot reject transfer outside assigned facility ({', '.join(user_whs)})."
+                            action_taken = "TRANSFER_WAREHOUSE_UNAUTHORIZED"
+                        else:
+                            curr_status = (transfer.get("status") or "").lower()
+                            if curr_status not in ("requested", "pending"):
+                                reply = f"Error: Transfer {actual_trf_id} has already been approved / processed (current status: {curr_status.upper()})."
+                                action_taken = "TRANSFER_ALREADY_PROCESSED"
+                            else:
+                                try:
+                                    InventoryService.approve_or_reject_transfer(
+                                        transfer_id=actual_trf_id, approved=False,
+                                        actor_id=matched_user["id"], actor_name=user_name,
+                                        actor_role=user_role, user_warehouse_id=matched_user.get("warehouse_id"),
+                                        org_id=org_id, notes="Rejected via WhatsApp")
+                                    reply = f"Transfer {actual_trf_id} has been Rejected."
+                                    action_taken = "TRANSFER_REJECTED"
+                                except HTTPException as e:
+                                    reply = f"Error: {e.detail}"
+                                    action_taken = "TRANSFER_REJECTION_ERROR"
+                                except Exception as e:
+                                    reply = f"Error rejecting transfer: {str(e)}"
+                                    action_taken = "TRANSFER_REJECTION_ERROR"
 
         # ---------------------------------------------------------------------
         # Command: HUMAN (Operations Desk Escalation)

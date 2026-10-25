@@ -13,7 +13,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController(text: 'operator@stockpilot.ai');
-  final _passwordController = TextEditingController(text: 'Admin123!');
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
 
@@ -27,77 +27,77 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _handleLogin() async {
     setState(() => _errorMessage = null);
     try {
-      await ref.read(authStateProvider.notifier).login(
+      await ref.read(authNotifierProvider.notifier).login(
             _emailController.text.trim(),
             _passwordController.text,
           );
-      if (mounted) context.go('/');
+      if (mounted) context.go('/dashboard');
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
     }
   }
 
-  void _selectDemoPersona(String email) {
+  void _fillAccount(String email) {
     _emailController.text = email;
-    _passwordController.text = 'Admin123!';
-    _handleLogin();
+    _passwordController.clear();
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authStateProvider);
+    final authState = ref.watch(authNotifierProvider);
     final isLoading = authState.isLoading;
 
     return Scaffold(
+      backgroundColor: AppColors.pureWhite,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Brand Header
+                // Brand Header (Deep Navy & Teal)
                 Center(
                   child: Container(
-                    width: 64,
-                    height: 64,
+                    width: 60,
+                    height: 60,
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceCardDark,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.accentCyan.withOpacity(0.3)),
+                      color: AppColors.primaryNavy,
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.accentCyan.withOpacity(0.12),
+                          color: AppColors.primaryNavy.withValues(alpha: 0.15),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         )
                       ],
                     ),
-                    child: const Icon(Icons.explore_outlined, size: 34, color: AppColors.accentCyan),
+                    child: const Icon(Icons.hub_outlined, size: 32, color: AppColors.tealAccent),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 const Text(
                   'STOCKPILOT AI',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
-                    color: AppColors.textPrimaryDark,
+                    letterSpacing: 0.8,
+                    color: AppColors.primaryNavy,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Enterprise Mobile Operations & Inventory Intelligence',
+                  'Distribution Intelligence & Warehouse Companion',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondaryDark,
+                    color: AppColors.textSecondaryLight,
+                    fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 36),
+                const SizedBox(height: 32),
 
                 // Error Banner
                 if (_errorMessage != null) ...[
@@ -105,17 +105,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppColors.errorBg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, size: 16, color: AppColors.error),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.error_outline, size: 18, color: AppColors.error),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: const TextStyle(color: AppColors.error, fontSize: 12),
+                            style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -128,9 +128,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
+                  style: const TextStyle(color: AppColors.primaryNavy, fontSize: 14),
+                  decoration: InputDecoration(
                     labelText: 'Corporate Email',
-                    prefixIcon: Icon(Icons.alternate_email, size: 18),
+                    labelStyle: const TextStyle(color: AppColors.textSecondaryLight),
+                    prefixIcon: const Icon(Icons.alternate_email, size: 18, color: AppColors.tealAccent),
+                    filled: true,
+                    fillColor: AppColors.surfaceLight,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.tealAccent, width: 1.5),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -139,14 +155,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  style: const TextStyle(color: AppColors.primaryNavy, fontSize: 14),
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                    labelStyle: const TextStyle(color: AppColors.textSecondaryLight),
+                    prefixIcon: const Icon(Icons.lock_outline, size: 18, color: AppColors.tealAccent),
+                    filled: true,
+                    fillColor: AppColors.surfaceLight,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.tealAccent, width: 1.5),
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                         size: 18,
-                        color: AppColors.textMutedDark,
+                        color: AppColors.textSecondaryLight,
                       ),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
@@ -157,46 +189,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // Sign In Button
                 ElevatedButton(
                   onPressed: isLoading ? null : _handleLogin,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.tealAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
                   child: isLoading
                       ? const SizedBox(
                           height: 18,
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Sign In to StockPilot'),
+                      : const Text(
+                          'Sign In to StockPilot',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
                 ),
                 const SizedBox(height: 28),
 
-                // Demo Personas Section
+                // Evaluation Accounts
                 const Row(
                   children: [
-                    Expanded(child: Divider(color: AppColors.borderDark)),
+                    Expanded(child: Divider(color: AppColors.borderLight)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'QUICK DEMO PERSONAS',
+                        'TEST ROLES (LIVE BACKEND AUTH)',
                         style: TextStyle(
-                          color: AppColors.textMutedDark,
+                          color: AppColors.textSecondaryLight,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                         ),
                       ),
                     ),
-                    Expanded(child: Divider(color: AppColors.borderDark)),
+                    Expanded(child: Divider(color: AppColors.borderLight)),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   alignment: WrapAlignment.center,
                   children: [
-                    _buildPersonaChip('Operator', 'operator@stockpilot.ai', Icons.qr_code_scanner),
-                    _buildPersonaChip('Warehouse Mgr', 'warehouse.manager@stockpilot.ai', Icons.storefront),
-                    _buildPersonaChip('Supply Chain', 'supplychain@stockpilot.ai', Icons.hub_outlined),
-                    _buildPersonaChip('Distributor', 'distributor@stockpilot.ai', Icons.local_shipping_outlined),
+                    _buildAccountChip('Operator', 'operator@stockpilot.ai', Icons.qr_code_scanner),
+                    _buildAccountChip('Warehouse Mgr', 'warehouse.manager@stockpilot.ai', Icons.storefront),
+                    _buildAccountChip('Supply Chain', 'supplychain@stockpilot.ai', Icons.hub_outlined),
+                    _buildAccountChip('Distributor', 'distributor@stockpilot.ai', Icons.local_shipping_outlined),
+                    _buildAccountChip('Org Admin', 'orgadmin@stockpilot.ai', Icons.business_outlined),
+                    _buildAccountChip('Super Admin', 'superadmin@stockpilot.ai', Icons.admin_panel_settings_outlined),
                   ],
                 ),
               ],
@@ -207,13 +251,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildPersonaChip(String label, String email, IconData icon) {
+  Widget _buildAccountChip(String label, String email, IconData icon) {
     return ActionChip(
-      avatar: Icon(icon, size: 13, color: AppColors.accentCyan),
-      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-      backgroundColor: AppColors.surfaceCardDark,
-      side: const BorderSide(color: AppColors.borderDark),
-      onPressed: () => _selectDemoPersona(email),
+      avatar: Icon(icon, size: 14, color: AppColors.tealAccent),
+      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primaryNavy)),
+      backgroundColor: AppColors.surfaceLight,
+      side: const BorderSide(color: AppColors.borderLight),
+      onPressed: () => _fillAccount(email),
     );
   }
 }

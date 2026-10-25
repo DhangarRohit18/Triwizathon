@@ -6,7 +6,6 @@ import '../../../core/config/api_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/user_model.dart';
-import '../../../data/services/local_storage_service.dart';
 import '../../inventory/providers/inventory_provider.dart';
 import '../providers/auth_provider.dart';
 
@@ -32,16 +31,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.dispose();
   }
 
-  void _switchRole(UserRole newRole) {
-    ref.read(authNotifierProvider.notifier).switchRole(newRole);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Switched persona to ${newRole.displayName}'),
-        backgroundColor: AppColors.tealAccent,
-      ),
-    );
-  }
-
   void _updateBaseUrl() {
     final newUrl = _urlController.text.trim();
     if (newUrl.isNotEmpty) {
@@ -49,22 +38,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('API Server URL updated to: $newUrl'),
-          backgroundColor: AppColors.successGreen,
+          backgroundColor: AppColors.tealAccent,
         ),
       );
     }
+  }
+
+  void _handleSignOut() async {
+    await ref.read(authNotifierProvider.notifier).signOut();
+    if (mounted) context.go('/login');
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
     final user = authState.user;
-    final currentRole = user?.role ?? UserRole.warehouseOperator;
+    final currentRole = user?.role ?? UserRole.operator;
     final pendingCount = ref.watch(pendingSyncCountProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.pureWhite,
       appBar: AppBar(
         title: const Text('Personnel & System Profile'),
+        backgroundColor: AppColors.primaryNavy,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -75,17 +73,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceGraphite,
+                color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.borderGraphite),
+                border: Border.all(color: AppColors.borderLight),
               ),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 28,
-                    backgroundColor: AppColors.tealAccent.withValues(alpha: 0.2),
+                    backgroundColor: AppColors.primaryNavy,
                     child: Text(
-                      user != null && user.name.isNotEmpty ? user.name[0] : 'U',
+                      user != null && user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -100,12 +98,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       children: [
                         Text(
                           user?.name ?? 'Authorized Personnel',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: AppColors.primaryNavy,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           user?.email ?? 'operator@stockpilot.ai',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
                         ),
                         const SizedBox(height: 6),
                         Row(
@@ -117,7 +119,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(width: 8),
                             Text(
                               user?.organizationId ?? 'org_triwiz_01',
-                              style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: AppColors.textSecondaryDark),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontFamily: 'monospace',
+                                color: AppColors.textSecondaryLight,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -127,37 +134,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // Active Facility
+            // Active Facility Scope
             const Text(
               'ASSIGNED WAREHOUSE FACILITY',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondaryLight,
+                letterSpacing: 0.5,
+              ),
             ),
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.navyDark,
+                color: AppColors.pureWhite,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.borderGraphite),
+                border: Border.all(color: AppColors.borderLight),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warehouse_outlined, color: AppColors.tealAccent, size: 22),
+                  const Icon(Icons.warehouse_outlined, color: AppColors.tealAccent, size: 24),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          user?.warehouseName ?? 'Central Distribution Hub (Bengaluru)',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          user?.warehouseName ?? 'Central Hub Chicago',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.primaryNavy,
+                          ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'ID: ${user?.warehouseId ?? "WH-CENTRAL-01"} • Cold-Chain Certified',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
+                          'Facility ID: ${user?.warehouseId ?? "Multi-Hub"} • Cold-Chain Certified',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
                         ),
                       ],
                     ),
@@ -165,89 +182,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // Interactive Role Switcher
+            // Offline Sync Queue Status
             const Text(
-              'SWITCH EVALUATION ROLE (TRIWIZATHON)',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Switching roles immediately adapts permissions, dashboards, and operational controls:',
-              style: TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: UserRole.values.map((role) {
-                final isSelected = role == currentRole;
-                return ChoiceChip(
-                  label: Text(role.displayName),
-                  selected: isSelected,
-                  selectedColor: AppColors.tealAccent,
-                  labelStyle: TextStyle(
-                    color: isSelected ? AppColors.navyDark : Colors.white,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 12,
-                  ),
-                  backgroundColor: AppColors.surfaceGraphite,
-                  onSelected: (_) => _switchRole(role),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-
-            // Backend Server Network Endpoint
-            const Text(
-              'FASTAPI BACKEND NETWORK HOST',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _urlController,
-                    decoration: const InputDecoration(
-                      hintText: 'http://10.0.2.2:8000',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.tealAccent,
-                    foregroundColor: AppColors.navyDark,
-                  ),
-                  onPressed: _updateBaseUrl,
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '• 10.0.2.2:8000: Android Studio Emulator host loopback\n• 127.0.0.1:8000: Desktop / Local machine\n• 192.168.x.x:8000: Physical phone over Wi-Fi',
-              style: TextStyle(fontSize: 10, color: AppColors.textSecondaryDark),
-            ),
-            const SizedBox(height: 24),
-
-            // Offline Sync Queue status
-            const Text(
-              'OFFLINE RESILIENCE STATUS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+              'TRANSACTION RESILIENCE & CACHE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondaryLight,
+                letterSpacing: 0.5,
+              ),
             ),
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surfaceGraphite,
+                color: AppColors.pureWhite,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.borderGraphite),
+                border: Border.all(color: AppColors.borderLight),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -255,48 +208,102 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Pending Sync Operations', style: TextStyle(fontSize: 12)),
+                      const Text(
+                        'Pending Offline Queue',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy),
+                      ),
                       Text(
-                        '$pendingCount draft actions queued',
+                        pendingCount == 0 ? 'All transactions synced with server' : '$pendingCount operations waiting for sync',
                         style: TextStyle(
                           fontSize: 11,
-                          color: pendingCount > 0 ? AppColors.warningAmber : AppColors.successGreen,
-                          fontWeight: FontWeight.bold,
+                          color: pendingCount == 0 ? AppColors.successGreen : AppColors.warningAmber,
                         ),
                       ),
                     ],
                   ),
                   if (pendingCount > 0)
-                    TextButton(
+                    ElevatedButton(
                       onPressed: () async {
-                        await LocalStorageService.clearPendingSyncQueue();
+                        await ref.read(localStorageProvider).clearQueue();
                         ref.invalidate(pendingSyncCountProvider);
                       },
-                      child: const Text('Clear Queue', style: TextStyle(color: AppColors.errorRed, fontSize: 11)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.surfaceLight,
+                        foregroundColor: AppColors.primaryNavy,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      ),
+                      child: const Text('Flush Queue', style: TextStyle(fontSize: 11)),
                     ),
                 ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
 
-            // Sign Out
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.errorRed,
-                  side: const BorderSide(color: AppColors.errorRed),
-                ),
-                icon: const Icon(Icons.logout),
-                label: const Text('SIGN OUT OF STOCKPILOT'),
-                onPressed: () {
-                  ref.read(authNotifierProvider.notifier).signOut();
-                  context.go('/login');
-                },
+            // Server Host Configuration
+            const Text(
+              'GATEWAY CONNECTION CONFIG',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondaryLight,
+                letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _urlController,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: AppColors.primaryNavy),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppColors.surfaceLight,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.borderLight),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.borderLight),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _updateBaseUrl,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryNavy,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                  child: const Text('Save', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+
+            // Logout Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _handleSignOut,
+                icon: const Icon(Icons.logout, size: 18, color: AppColors.errorRed),
+                label: const Text(
+                  'Sign Out from StockPilot',
+                  style: TextStyle(color: AppColors.errorRed, fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.errorRed),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
           ],
         ),
       ),

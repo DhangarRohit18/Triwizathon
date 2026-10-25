@@ -146,5 +146,73 @@ void main() {
       queue = await LocalStorageService.getPendingSyncQueue();
       expect(queue.length, 0);
     });
+
+    test('UserModel role permissions and facility access scoping', () {
+      // 1. Super Admin
+      final superAdmin = UserModel(
+        id: 'usr_sa',
+        email: 'superadmin@stockpilot.ai',
+        fullName: 'Super Admin',
+        role: UserRole.superAdmin,
+        orgId: 'system',
+        permissions: ['platform:health_view', 'audit:view', 'organizations:manage'],
+        warehouseIds: [],
+      );
+      expect(superAdmin.canAccessWarehouse('wh_any'), true);
+      expect(superAdmin.canAccessIot, true);
+      expect(superAdmin.canApproveTransfers, true);
+
+      // 2. Distributor
+      final distributor = UserModel(
+        id: 'usr_dist',
+        email: 'dist@pharma.com',
+        fullName: 'Field Distributor',
+        role: UserRole.distributor,
+        orgId: 'org_01',
+        permissions: ['scans:execute', 'delivery:confirm', 'damage:report'],
+        warehouseIds: [],
+      );
+      expect(distributor.canAccessTasks, false);
+      expect(distributor.canAccessIot, false);
+      expect(distributor.canApproveTransfers, false);
+      expect(distributor.canMutateInventory, false);
+
+      // 3. Warehouse Operator with scoped facility
+      final opCentral = UserModel(
+        id: 'usr_op',
+        email: 'op@stockpilot.ai',
+        fullName: 'Central Floor Operator',
+        role: UserRole.operator,
+        orgId: 'org_01',
+        warehouseIds: ['wh_central_01'],
+        permissions: ['inventory:receive', 'inventory:dispatch', 'tasks:execute'],
+      );
+      expect(opCentral.canAccessTasks, true);
+      expect(opCentral.canAccessIot, false);
+      expect(opCentral.canApproveTransfers, false);
+      expect(opCentral.canAccessWarehouse('wh_central_01'), true);
+      expect(opCentral.canAccessWarehouse('wh_boston_02'), false);
+
+      // 4. Warehouse Manager
+      final whMgr = UserModel(
+        id: 'usr_mgr',
+        email: 'mgr@stockpilot.ai',
+        fullName: 'Facility Manager',
+        role: UserRole.warehouseManager,
+        orgId: 'org_01',
+        warehouseIds: ['wh_central_01'],
+        permissions: ['inventory:receive', 'transfers:approve', 'alerts:manage'],
+      );
+      expect(whMgr.canApproveTransfers, true);
+      expect(whMgr.canAccessIot, true);
+      expect(whMgr.canAccessWarehouse('wh_central_01'), true);
+      expect(whMgr.canAccessWarehouse('wh_other'), false);
+
+      // 5. Strict role parsing rejects unknown roles
+      expect(
+        () => UserRole.fromString('UNKNOWN_HACKER_ROLE'),
+        throwsFormatException,
+      );
+    });
   });
 }

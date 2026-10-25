@@ -1,24 +1,25 @@
 import os
 from typing import List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "STOCKPILOT AI"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    ALLOW_DEMO_MODE: bool = os.getenv("ALLOW_DEMO_MODE", "true").lower() in ("true", "1", "yes")
     
     # Security & JWT
     SECRET_KEY: str = os.getenv("SECRET_KEY", "stockpilot-super-secret-production-key-triwizathon-2026")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
-    # CORS
+    # Explicit CORS Origins (No Wildcards in Production)
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
-        "chrome-extension://*",
-        "*"
+        "http://127.0.0.1:3000",
     ]
     
     # Firebase configuration
@@ -38,13 +39,19 @@ class Settings(BaseSettings):
     # Chrome Extension API
     EXTENSION_API_KEY: str = os.getenv("EXTENSION_API_KEY", "stockpilot-ext-v3-authorized-key")
 
-    # WhatsApp Admin Bootstrap & Registration
+    # WhatsApp Admin Bootstrap, Bridge & Registration
     ADMIN_BOOTSTRAP_SECRET: str = os.getenv("ADMIN_BOOTSTRAP_SECRET", "stockpilot-admin-bootstrap-secret-2026")
+    BRIDGE_API_SECRET: str = os.getenv("BRIDGE_API_SECRET", "stockpilot-baileys-bridge-internal-key-2026")
     WHATSAPP_INVITATION_EXPIRE_HOURS: int = int(os.getenv("WHATSAPP_INVITATION_EXPIRE_HOURS", "24"))
     WHATSAPP_CHALLENGE_MAX_ATTEMPTS: int = int(os.getenv("WHATSAPP_CHALLENGE_MAX_ATTEMPTS", "5"))
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    # Express Lane Fast-Fulfillment Feature Flag (Default OFF)
+    EXPRESS_LANE_ENABLED: bool = os.getenv("EXPRESS_LANE_ENABLED", "false").lower() in ("true", "1", "yes")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"
+    )
 
 settings = Settings()

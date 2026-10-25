@@ -5,6 +5,14 @@ from app.core.security import get_password_hash, ROLE_SUPER_ADMIN, ROLE_ORG_ADMI
 
 ORG_ID = "org_triwiz_01"
 
+_CACHED_PWD_HASH = None
+
+def _get_seeded_password_hash():
+    global _CACHED_PWD_HASH
+    if _CACHED_PWD_HASH is None:
+        _CACHED_PWD_HASH = get_password_hash("Admin123!")
+    return _CACHED_PWD_HASH
+
 def init_seed_data():
     """
     Seeds comprehensive realistic multi-warehouse enterprise dataset into data store.
@@ -24,7 +32,7 @@ def init_seed_data():
     db.set_document("organizations", org["id"], org)
 
     # 2. Users (All 6 Roles)
-    hashed_pwd = get_password_hash("Admin123!")
+    hashed_pwd = _get_seeded_password_hash()
     users = [
         {
             "id": "usr_superadmin",
@@ -730,5 +738,40 @@ def init_seed_data():
         "timestamp": now_iso,
     }
     db.set_document("audit_logs", audit_init["id"], audit_init)
+
+    # 12. 90-Day Daily Demand History for Products
+    demand_base_params = {
+        "prd_vax_01": (85.0, 18.0),
+        "prd_ins_02": (120.0, 22.0),
+        "prd_ant_03": (160.0, 30.0),
+        "prd_bio_04": (14.0, 4.0),
+        "prd_ppe_05": (240.0, 45.0),
+        "prd_car_06": (45.0, 8.0)
+    }
+    history_days = 90
+    for prd in products:
+        p_id = prd["id"]
+        base_mean, variance = demand_base_params.get(p_id, (100.0, 20.0))
+        for day_offset in range(history_days, 0, -1):
+            dt = now - timedelta(days=day_offset)
+            dt_str = dt.strftime("%Y-%m-%d")
+            dow = dt.weekday()
+            dow_mult = 1.25 if dow in (1, 3) else (0.65 if dow == 6 else 1.0)
+            trend_val = 0.15 * (history_days - day_offset)
+            # deterministic pseudorandom variation based on product and day
+            noise = ((hash(f"{p_id}_{dt_str}") % 200) - 100) / 100.0 * (variance * 0.4)
+            daily_demand = max(5, int(round((base_mean + trend_val) * dow_mult + noise)))
+
+            rec_id = f"dh_{p_id}_{dt_str}"
+            db.set_document("demand_history", rec_id, {
+                "id": rec_id,
+                "org_id": ORG_ID,
+                "product_id": p_id,
+                "date": dt_str,
+                "demand": daily_demand,
+                "day_of_week": dow,
+                "day_of_month": dt.day,
+                "created_at": now_iso
+            })
 
     print(f"[SUCCESS] STOCKPILOT AI Seed Data successfully initialized for organization {ORG_ID}")

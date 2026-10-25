@@ -6,31 +6,34 @@
   <title>StockPilot AI Companion</title>
   <style>
     :root {
-      --bg-primary: #FFFFFF;
-      --bg-surface: #FFFFFF;
-      --bg-card: #FFFFFF;
-      --border-color: rgba(23, 50, 77, 0.15);
-      --border-focus: #0D9488;
-      --text-main: #17324D;
-      --text-muted: rgba(23, 50, 77, 0.65);
-      --text-dim: rgba(23, 50, 77, 0.45);
-      --accent-cyan: #0D9488;
-      --accent-blue: #0D9488;
-      --accent-green: #0D9488;
-      --accent-amber: #17324D;
-      --accent-red: #17324D;
+      --bg-white: #FFFFFF;
+      --bg-light: #F8FAFC;
+      --navy: #17324D;
+      --teal: #0D9488;
+      --teal-light: #F0FDFA;
+      --slate-500: #64748B;
+      --slate-700: #334155;
+      --slate-900: #0F172A;
+      --border: #E2E8F0;
+      --border-dark: rgba(23, 50, 77, 0.12);
+      --green-bg: #ECFDF5;
+      --green-text: #059669;
+      --amber-bg: #FFFBEB;
+      --amber-text: #D97706;
+      --rose-bg: #FFF1F2;
+      --rose-text: #E11D48;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      width: 400px;
-      min-height: 520px;
+      width: 420px;
+      min-height: 540px;
       max-height: 600px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-main);
+      background: var(--bg-white);
+      color: var(--navy);
       font-size: 13px;
-      line-height: 1.4;
+      line-height: 1.45;
       overflow-x: hidden;
       overflow-y: auto;
     }
@@ -40,8 +43,8 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border-color);
+      background: var(--navy);
+      color: #FFFFFF;
       padding: 10px 14px;
       display: flex;
       align-items: center;
@@ -55,214 +58,217 @@
     .pulse-dot {
       width: 8px;
       height: 8px;
-      background: var(--accent-green);
+      background: #10B981;
       border-radius: 50%;
-      box-shadow: 0 0 8px rgba(13, 148, 136, 0.5);
-      animation: pulse 2s infinite;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
     }
     .pulse-dot.offline {
-      background: var(--accent-red);
-      box-shadow: 0 0 8px rgba(23, 50, 77, 0.5);
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(1.15); }
+      background: #EF4444;
+      box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
     }
     .brand-title {
       font-weight: 800;
       font-size: 12px;
       letter-spacing: 0.08em;
-      color: var(--accent-cyan);
+      color: #FFFFFF;
       text-transform: uppercase;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .user-pill {
       display: flex;
       align-items: center;
       gap: 6px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      padding: 3px 8px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 2px 8px;
       border-radius: 12px;
       font-size: 11px;
+      color: #FFFFFF;
     }
     .role-badge {
       font-size: 9px;
       text-transform: uppercase;
       padding: 1px 5px;
       border-radius: 4px;
-      background: #17324D;
+      background: var(--teal);
       color: #FFFFFF;
       font-weight: 700;
     }
-    .logout-btn {
+    .icon-btn {
       background: none;
       border: none;
-      color: var(--text-dim);
+      color: rgba(255, 255, 255, 0.8);
       cursor: pointer;
-      font-size: 11px;
-      margin-left: 4px;
+      font-size: 14px;
+      padding: 3px 5px;
+      border-radius: 4px;
+      transition: background 0.2s;
     }
-    .logout-btn:hover { color: var(--accent-red); }
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #FFFFFF;
+    }
 
-    /* Offline / Error Alert Banner */
+    /* Banners & Alerts */
+    #bannerContainer { padding: 0; }
     .banner {
-      padding: 8px 12px;
+      padding: 8px 14px;
       font-size: 11px;
+      font-weight: 600;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      border-bottom: 1px solid transparent;
     }
-    .banner.error {
-      background: rgba(23, 50, 77, 0.08);
-      color: #17324D;
-      border-bottom: 1px solid rgba(23, 50, 77, 0.2);
-    }
-    .banner.warning {
-      background: rgba(23, 50, 77, 0.08);
-      color: #17324D;
-      border-bottom: 1px solid rgba(23, 50, 77, 0.2);
-    }
+    .banner.error { background: var(--rose-bg); color: var(--rose-text); border-color: rgba(225, 29, 72, 0.2); }
+    .banner.warning { background: var(--amber-bg); color: var(--amber-text); border-color: rgba(217, 119, 6, 0.2); }
+    .banner.success { background: var(--green-bg); color: var(--green-text); border-color: rgba(5, 150, 105, 0.2); }
     .banner-btn {
-      background: rgba(255,255,255,0.15);
-      border: none;
+      background: var(--navy);
       color: #fff;
-      padding: 2px 6px;
+      border: none;
       border-radius: 4px;
-      cursor: pointer;
+      padding: 3px 8px;
       font-size: 10px;
+      cursor: pointer;
     }
 
-    /* Views */
-    .view-container {
-      padding: 12px 14px;
-    }
+    /* Container */
+    .view-container { padding: 14px; }
 
     /* Auth View */
     .auth-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
+      background: var(--bg-white);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 18px 14px;
-      margin-top: 10px;
+      padding: 16px;
     }
     .auth-title {
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 700;
-      color: var(--text-main);
+      color: var(--navy);
       margin-bottom: 4px;
     }
     .auth-subtitle {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--slate-500);
       margin-bottom: 14px;
     }
     .form-group {
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
     .form-group label {
       display: block;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--slate-700);
       margin-bottom: 4px;
     }
     .form-control {
       width: 100%;
       padding: 8px 10px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      color: var(--text-main);
       font-size: 12px;
+      color: var(--navy);
+      background: var(--bg-light);
       outline: none;
       transition: border-color 0.2s;
     }
     .form-control:focus {
-      border-color: var(--border-focus);
+      border-color: var(--teal);
+      background: #FFFFFF;
     }
     .btn-primary {
       width: 100%;
       padding: 9px;
-      background: var(--accent-blue);
-      color: #fff;
+      background: var(--teal);
+      color: #FFFFFF;
       border: none;
       border-radius: 6px;
-      font-weight: 600;
       font-size: 12px;
+      font-weight: 700;
       cursor: pointer;
       transition: background 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin-top: 10px;
     }
-    .btn-primary:hover { background: #0B7D73; }
+    .btn-primary:hover { background: #0F766E; }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* Persona Quick Buttons */
-    .persona-grid {
+    /* Test Accounts Divider & Grid */
+    .dev-accounts-title {
+      margin-top: 16px;
+      margin-bottom: 8px;
+      font-size: 10px;
+      color: var(--slate-500);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+    .dev-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 6px;
-      margin-top: 12px;
     }
-    .persona-btn {
+    .dev-btn {
       padding: 6px 8px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
+      background: var(--bg-light);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      color: var(--text-muted);
-      font-size: 10px;
-      cursor: pointer;
       text-align: left;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--navy);
       transition: all 0.2s;
     }
-    .persona-btn:hover {
-      border-color: var(--accent-cyan);
-      color: var(--text-main);
-      background: rgba(13, 148, 136, 0.08);
+    .dev-btn:hover {
+      border-color: var(--teal);
+      background: var(--teal-light);
     }
-    .persona-btn strong {
-      display: block;
-      color: var(--text-main);
+    .dev-btn strong { display: block; font-size: 11px; color: var(--navy); }
+    .dev-btn span { font-size: 10px; color: var(--slate-500); }
+
+    /* Host Config Toggle Box */
+    .host-toggle-row {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       font-size: 11px;
+      color: var(--slate-500);
+    }
+    .host-input-wrap {
+      margin-top: 8px;
+      display: none;
     }
 
-    /* Dashboard Layout */
-    .wh-select-row {
+    /* Facility / Warehouse Filter Row */
+    .facility-row {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
       gap: 8px;
+      align-items: center;
       margin-bottom: 12px;
     }
-    .wh-select {
+    .facility-select {
       flex: 1;
-      padding: 6px 8px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
+      padding: 7px 10px;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      color: var(--text-main);
-      font-size: 11px;
+      background: var(--bg-light);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--navy);
       outline: none;
     }
-    .refresh-btn {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      color: var(--accent-cyan);
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .refresh-btn:hover { background: rgba(23, 50, 77, 0.05); }
+    .facility-select:focus { border-color: var(--teal); }
 
-    /* KPI Grid */
+    /* KPI Summary Row */
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -270,204 +276,256 @@
       margin-bottom: 12px;
     }
     .kpi-box {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
+      background: var(--bg-light);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 7px 6px;
+      padding: 8px 4px;
       text-align: center;
     }
-    .kpi-box .val {
-      font-size: 14px;
+    .kpi-val {
+      font-size: 16px;
       font-weight: 800;
-      color: var(--text-main);
+      color: var(--navy);
     }
-    .kpi-box .lbl {
+    .kpi-lbl {
       font-size: 9px;
-      color: var(--text-muted);
       text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-500);
       margin-top: 2px;
     }
-    .kpi-box.alert-box .val { color: var(--accent-red); }
-    .kpi-box.warning-box .val { color: var(--accent-amber); }
-    .kpi-box.green-box .val { color: var(--accent-green); }
 
-    /* Tabs */
+    /* Role Context Banner */
+    .role-context-bar {
+      background: var(--teal-light);
+      border: 1px solid rgba(13, 148, 136, 0.25);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+    .role-context-title { font-weight: 700; color: var(--navy); }
+    .role-context-sub { color: var(--slate-500); font-size: 10px; }
+
+    /* Tab Bar */
     .tab-bar {
       display: flex;
-      border-bottom: 1px solid var(--border-color);
-      margin-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+      background: var(--bg-light);
+      border-radius: 6px 6px 0 0;
     }
     .tab-btn {
       flex: 1;
       padding: 8px 4px;
-      background: none;
       border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--text-muted);
+      background: transparent;
       font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-500);
       cursor: pointer;
+      text-align: center;
+      border-bottom: 2px solid transparent;
       transition: all 0.2s;
     }
     .tab-btn.active {
-      color: var(--accent-cyan);
-      border-bottom-color: var(--accent-cyan);
-      background: rgba(56, 189, 248, 0.05);
+      color: var(--teal);
+      border-bottom-color: var(--teal);
+      background: #FFFFFF;
     }
 
-    /* Content Lists */
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
-    .search-wrap {
+    /* Search Bar */
+    .search-box {
       margin-bottom: 10px;
+      position: relative;
     }
-    .items-scroll {
-      max-height: 200px;
-      overflow-y: auto;
-      border: 1px solid var(--border-color);
+    .search-box input {
+      width: 100%;
+      padding: 7px 10px 7px 28px;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      background: #0b1120;
+      font-size: 12px;
+      outline: none;
+      color: var(--navy);
+      background: var(--bg-light);
+    }
+    .search-box input:focus { border-color: var(--teal); background: #fff; }
+    .search-icon {
+      position: absolute;
+      left: 9px;
+      top: 8px;
+      font-size: 12px;
+      color: var(--slate-500);
     }
 
+    /* List Rows & Cards */
+    .list-container {
+      max-height: 250px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
     .list-row {
-      padding: 8px 10px;
-      border-bottom: 1px solid rgba(23, 50, 77, 0.05);
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     .list-row:last-child { border-bottom: none; }
-    .item-sku {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--accent-cyan);
-    }
-    .item-sub {
-      font-size: 10px;
-      color: var(--text-muted);
-      max-width: 200px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .item-status-tag {
+    .list-row:hover { background: var(--bg-light); }
+    .item-sku { font-weight: 700; font-size: 12px; color: var(--navy); }
+    .item-name { font-size: 11px; color: var(--slate-500); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
       font-size: 9px;
       font-weight: 700;
-      padding: 1px 5px;
-      border-radius: 4px;
       text-transform: uppercase;
     }
-    .tag-normal { background: #064e3b; color: #a7f3d0; }
-    .tag-low { background: rgba(23, 50, 77, 0.2); color: #17324D; }
-    .tag-stockout { background: rgba(23, 50, 77, 0.2); color: #fecaca; }
+    .badge-green { background: var(--green-bg); color: var(--green-text); }
+    .badge-amber { background: var(--amber-bg); color: var(--amber-text); }
+    .badge-rose { background: var(--rose-bg); color: var(--rose-text); }
 
-    /* Alert Items */
-    .alert-card {
-      padding: 8px 10px;
-      border-bottom: 1px solid rgba(23, 50, 77, 0.05);
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
+    /* Alert & Transfer Cards */
+    .card-item {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
     }
-    .alert-card:last-child { border-bottom: none; }
-    .alert-head {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .alert-desc {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    /* Transfer Cards */
-    .trf-card {
-      padding: 8px 10px;
-      border-bottom: 1px solid rgba(23, 50, 77, 0.05);
+    .card-item:last-child { border-bottom: none; }
+    .card-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 4px;
     }
-    .trf-card:last-child { border-bottom: none; }
-    .btn-approve {
-      padding: 4px 8px;
-      background: #059669;
+    .card-title { font-weight: 700; font-size: 11px; }
+    .card-desc { font-size: 11px; color: var(--slate-500); }
+
+    /* Approve Button */
+    .btn-action-small {
+      padding: 4px 10px;
+      background: var(--teal);
       color: #fff;
       border: none;
       border-radius: 4px;
       font-size: 10px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
     }
-    .btn-approve:hover { background: #047857; }
+    .btn-action-small:hover { background: #0F766E; }
 
-    /* Empty & Loading States */
+    /* Empty States */
     .empty-state {
       padding: 24px 12px;
       text-align: center;
-      color: var(--text-dim);
+      color: var(--slate-500);
       font-size: 11px;
     }
-    .empty-icon {
-      font-size: 20px;
-      margin-bottom: 6px;
-      display: block;
-    }
 
-    /* Deep Link Footer */
-    .footer-actions {
-      margin-top: 12px;
+    /* Footer Deep Links */
+    footer {
+      margin-top: 14px;
       padding-top: 10px;
-      border-top: 1px solid var(--border-color);
+      border-top: 1px solid var(--border);
       display: flex;
       gap: 6px;
     }
-    .btn-secondary {
+    .footer-btn {
       flex: 1;
       padding: 7px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      color: var(--text-muted);
+      background: var(--bg-light);
+      border: 1px solid var(--border);
       border-radius: 6px;
+      color: var(--navy);
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       text-align: center;
+      text-decoration: none;
       transition: all 0.2s;
     }
-    .btn-secondary:hover {
-      background: rgba(13, 148, 136, 0.08);
-      color: var(--text-main);
-      border-color: var(--border-focus);
+    .footer-btn:hover {
+      background: var(--teal-light);
+      border-color: var(--teal);
+      color: var(--teal);
     }
+
+    /* Modal Dialog */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #FFFFFF;
+      border-radius: 8px;
+      padding: 16px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    .modal-body { font-size: 11px; color: var(--slate-700); margin-bottom: 14px; line-height: 1.4; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
   </style>
 </head>
 <body>
+  <!-- Header -->
   <header>
     <div class="brand-wrap">
       <div class="pulse-dot" id="pulseDot"></div>
       <div class="brand-title">StockPilot AI</div>
     </div>
-    <div id="authHeader" style="display: none;">
-      <div class="user-pill">
-        <span id="userName">User</span>
-        <span class="role-badge" id="userRole">ROLE</span>
-        <button class="logout-btn" id="logoutBtn" title="Sign Out">✕</button>
+    <div class="header-actions">
+      <div id="authHeader" style="display: none;">
+        <div class="user-pill">
+          <span id="headerUserName">User</span>
+          <span class="role-badge" id="headerUserRole">OPERATOR</span>
+        </div>
       </div>
+      <button class="icon-btn" id="configToggleBtn" title="Host Configuration">⚙</button>
+      <button class="icon-btn" id="logoutBtn" style="display: none;" title="Sign Out">✕</button>
     </div>
   </header>
 
+  <!-- Banner Alerts -->
   <div id="bannerContainer"></div>
+
+  <!-- Settings Host Modal View -->
+  <div class="view-container" id="configView" style="display: none; background: #FFFBEB; border-bottom: 1px solid #FDE68A;">
+    <div style="font-weight: 700; font-size: 12px; margin-bottom: 4px; color: var(--navy);">Endpoint Environment Configuration</div>
+    <div style="font-size: 11px; color: var(--slate-700); margin-bottom: 8px;">Configure deployed or development service origins (HTTPS supported):</div>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;">
+      <div>
+        <label style="font-size: 10px; font-weight: 700; color: var(--slate-700); display: block; margin-bottom: 2px;">Backend API Endpoint</label>
+        <input type="text" id="customApiBase" class="form-control" style="font-family: monospace; font-size: 11px; padding: 5px 8px;" placeholder="http://localhost:8000/api/v1" />
+      </div>
+      <div>
+        <label style="font-size: 10px; font-weight: 700; color: var(--slate-700); display: block; margin-bottom: 2px;">Web Console Origin</label>
+        <input type="text" id="customWebBase" class="form-control" style="font-family: monospace; font-size: 11px; padding: 5px 8px;" placeholder="http://localhost:5173" />
+      </div>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 6px;">
+      <button class="footer-btn" id="cancelConfigBtn" style="flex: none; padding: 4px 10px;">Cancel</button>
+      <button class="btn-action-small" id="saveApiBaseBtn">Save Configuration</button>
+    </div>
+  </div>
 
   <!-- 1. SIGN-IN VIEW -->
   <div class="view-container" id="authView">
     <div class="auth-card">
       <div class="auth-title">Logistics Gateway Login</div>
-      <div class="auth-subtitle">Enter your enterprise credentials to connect to StockPilot AI</div>
+      <div class="auth-subtitle">Sign in with verified server credentials to access role-authorized companion controls.</div>
       
       <form id="loginForm">
         <div class="form-group">
@@ -479,126 +537,90 @@
           <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required />
         </div>
         <button type="submit" class="btn-primary" id="loginBtn">
-          Sign In to Companion
+          Authenticate Session
         </button>
       </form>
-
-      <div style="margin-top: 14px; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; text-align: center;">
-        Quick Role Profiles
-      </div>
-      <div class="persona-grid">
-        <button class="persona-btn" data-email="warehouse.manager@stockpilot.ai" data-pwd="Admin123!">
-          <strong>Wh Manager</strong>
-          wh_manager@stockpilot
-        </button>
-        <button class="persona-btn" data-email="supplychain@stockpilot.ai" data-pwd="Admin123!">
-          <strong>Supply Chain</strong>
-          supplychain@stockpilot
-        </button>
-        <button class="persona-btn" data-email="operator@stockpilot.ai" data-pwd="Admin123!">
-          <strong>Operator</strong>
-          operator@stockpilot
-        </button>
-        <button class="persona-btn" data-email="superadmin@stockpilot.ai" data-pwd="Admin123!">
-          <strong>Super Admin</strong>
-          superadmin@stockpilot
-        </button>
-      </div>
     </div>
   </div>
 
-  <!-- 2. AUTHENTICATED DASHBOARD VIEW -->
+  <!-- 2. AUTHENTICATED ROLE-AWARE DASHBOARD VIEW -->
   <div class="view-container" id="dashView" style="display: none;">
-    <!-- Warehouse Select & Refresh -->
-    <div class="wh-select-row">
-      <select id="warehouseSelect" class="wh-select">
+    <!-- Facility Selection Bar -->
+    <div class="facility-row">
+      <select id="warehouseSelect" class="facility-select">
         <option value="wh_chicago_01">Central Hub Chicago</option>
       </select>
-      <button class="refresh-btn" id="refreshBtn">
-        ↻ Refresh
-      </button>
+      <button class="btn-action-small" id="refreshBtn" title="Sync live records">↻ Sync</button>
     </div>
 
-    <!-- Live KPI Metrics -->
-    <div class="kpi-row">
-      <div class="kpi-box green-box">
-        <div class="val" id="kpiItems">0</div>
-        <div class="lbl">Items</div>
+    <!-- Role Context Banner -->
+    <div class="role-context-bar">
+      <div>
+        <div class="role-context-title" id="roleContextTitle">Warehouse Operator Workspace</div>
+        <div class="role-context-sub" id="roleContextSubtitle">Assigned Hub Operations</div>
       </div>
-      <div class="kpi-box warning-box">
-        <div class="val" id="kpiLow">0</div>
-        <div class="lbl">Low Stock</div>
-      </div>
-      <div class="kpi-box alert-box">
-        <div class="val" id="kpiAlerts">0</div>
-        <div class="lbl">Excursions</div>
-      </div>
-      <div class="kpi-box warning-box">
-        <div class="val" id="kpiExpiry">0</div>
-        <div class="lbl">Near Expiry</div>
-      </div>
+      <span class="badge badge-green" id="roleContextBadge">AUTHORIZED</span>
     </div>
 
-    <!-- Tab Bar -->
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="tabStock">Stock</button>
-      <button class="tab-btn" data-tab="tabAlerts">Alerts</button>
-      <button class="tab-btn" data-tab="tabOptimizer">Optimizer</button>
-    </div>
-
-    <!-- Tab 1: Stock Inventory -->
-    <div class="tab-content active" id="tabStock">
-      <div class="search-wrap">
-        <input type="text" id="skuSearch" class="form-control" placeholder="Search SKU, name, or handling..." />
+    <!-- Live KPI Metrics Strip -->
+    <div class="kpi-row" id="kpiRow">
+      <div class="kpi-box">
+        <div class="kpi-val" id="kpiItems">0</div>
+        <div class="kpi-lbl">SKUs</div>
       </div>
-      <div class="items-scroll" id="stockListContainer">
-        <div class="empty-state">Loading stock records...</div>
+      <div class="kpi-box">
+        <div class="kpi-val" id="kpiLow" style="color: var(--amber-text);">0</div>
+        <div class="kpi-lbl">Low Stock</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-val" id="kpiAlerts" style="color: var(--rose-text);">0</div>
+        <div class="kpi-lbl">Excursions</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-val" id="kpiExpiry">0</div>
+        <div class="kpi-lbl">Expiring</div>
       </div>
     </div>
 
-    <!-- Tab 2: Alerts & Expiry -->
-    <div class="tab-content" id="tabAlerts">
-      <div style="font-size: 10px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;">
-        Cold-Chain IoT Excursions
-      </div>
-      <div class="items-scroll" id="iotAlertsContainer" style="max-height: 100px; margin-bottom: 10px;">
-        <div class="empty-state">No active telemetry excursions</div>
+    <!-- Dynamic Role Tab Bar -->
+    <div class="tab-bar" id="roleTabBar">
+      <!-- Injected dynamically by role in popup.js -->
+    </div>
+
+    <!-- Active Content Area Container -->
+    <div id="tabContentArea">
+      <!-- Search Box (always available for quick lookups) -->
+      <div class="search-box" id="searchBoxWrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="skuSearchInput" placeholder="Quick search SKU, batch or item..." />
       </div>
 
-      <div style="font-size: 10px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;">
-        FEFO Expiry Warnings (Next 60 Days)
-      </div>
-      <div class="items-scroll" id="expiryAlertsContainer" style="max-height: 100px;">
-        <div class="empty-state">No batches approaching expiry</div>
+      <!-- Main Dynamic Content Container -->
+      <div class="list-container" id="mainListContainer">
+        <!-- Injected via safe DOM rendering -->
       </div>
     </div>
 
-    <!-- Tab 3: Optimizer & Distribution -->
-    <div class="tab-content" id="tabOptimizer">
-      <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-weight: 700; color: var(--accent-cyan); font-size: 11px;">OR-Tools MILP Solver</span>
-          <span style="color: var(--accent-green); font-weight: 700; font-size: 11px;" id="optSavings">16.4% Cost Reduction</span>
-        </div>
-        <div style="font-size: 11px; color: var(--text-muted);" id="optModel">
-          Constrained distribution model active with FEFO expiry penalty
-        </div>
-      </div>
+    <!-- Deep Link Footer -->
+    <footer>
+      <a href="#" target="_blank" class="footer-btn" id="openWebConsoleBtn">
+        Open Web Console ↗
+      </a>
+      <a href="#" target="_blank" class="footer-btn" id="openExpressLaneBtn">
+        Express Lane SOS ⚡
+      </a>
+    </footer>
+  </div>
 
-      <div style="font-size: 10px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;">
-        Pending Transfers Requiring Approval
+  <!-- Confirmation Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-card">
+      <div class="modal-title" id="modalTitle">Confirm Action</div>
+      <div class="modal-body" id="modalBody">Are you sure you want to proceed?</div>
+      <div class="modal-actions">
+        <button class="footer-btn" id="modalCancelBtn">Cancel</button>
+        <button class="btn-action-small" id="modalConfirmBtn">Confirm & Execute</button>
       </div>
-      <div class="items-scroll" id="transfersContainer" style="max-height: 110px;">
-        <div class="empty-state">No pending transfers awaiting review</div>
-      </div>
-    </div>
-
-    <!-- Quick Navigation / Deep Links -->
-    <div class="footer-actions">
-      <button class="btn-secondary" id="deepInventory">Inventory ↗</button>
-      <button class="btn-secondary" id="deepTransfers">Transfers ↗</button>
-      <button class="btn-secondary" id="deepOptimizer">Optimizer ↗</button>
-      <button class="btn-secondary" id="deepConsole" style="color: var(--accent-cyan); border-color: #0284c7;">Console ↗</button>
     </div>
   </div>
 

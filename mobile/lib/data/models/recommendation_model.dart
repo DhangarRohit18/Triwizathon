@@ -15,6 +15,8 @@ class AllocationRecommendationModel {
   final double expiryRiskScore;
   final double stockoutRiskAfter;
   final String rationale;
+  final bool transferred;
+  final String? transferId;
 
   AllocationRecommendationModel({
     required this.id,
@@ -33,6 +35,8 @@ class AllocationRecommendationModel {
     required this.expiryRiskScore,
     required this.stockoutRiskAfter,
     required this.rationale,
+    this.transferred = false,
+    this.transferId,
   });
 
   int get recommendedQuantity => allocatedQuantity;
@@ -58,6 +62,8 @@ class AllocationRecommendationModel {
       expiryRiskScore: (json['expiry_risk_score'] as num?)?.toDouble() ?? 0.0,
       stockoutRiskAfter: (json['stockout_risk_after'] as num?)?.toDouble() ?? (json['stockout_risk_score'] as num?)?.toDouble() ?? 0.0,
       rationale: json['rationale'] ?? '',
+      transferred: json['transferred'] == true,
+      transferId: json['transfer_id'],
     );
   }
 }

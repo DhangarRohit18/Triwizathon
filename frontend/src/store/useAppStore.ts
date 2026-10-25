@@ -24,19 +24,9 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  user: {
-    id: 'usr_supplychain',
-    email: 'supplychain@stockpilot.ai',
-    full_name: 'Elena Rostova',
-    role: 'supply_chain_manager',
-    org_id: 'org_triwiz_01',
-    warehouse_id: null,
-    phone_number: '+13125550103',
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-  token: localStorage.getItem('stockpilot_token') || 'demo_token',
-  activeRole: (localStorage.getItem('stockpilot_role') as RoleType) || 'supply_chain_manager',
+  user: null,
+  token: localStorage.getItem('stockpilot_token') || null,
+  activeRole: (localStorage.getItem('stockpilot_role') as RoleType) || 'operator',
   selectedWarehouseId: 'all',
   theme: (localStorage.getItem('stockpilot_theme') as 'dark' | 'light') || 'light',
   toasts: [],

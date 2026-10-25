@@ -2,49 +2,7 @@ import { useAppStore } from '../store/useAppStore';
 
 const API_BASE = '/api/v1';
 
-let refreshPromise: Promise<string | null> | null = null;
-
-async function refreshAuthToken(): Promise<string | null> {
-  if (refreshPromise) return refreshPromise;
-  
-  refreshPromise = (async () => {
-    try {
-      const activeRole = useAppStore.getState().activeRole || 'supply_chain_manager';
-      // 1. Attempt role persona switch
-      const res = await fetch(`${API_BASE}/auth/demo/switch-role`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: activeRole }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        useAppStore.getState().setUser(data.user, data.access_token);
-        return data.access_token;
-      }
-      
-      // 2. Direct login fallback
-      const loginRes = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'supplychain@stockpilot.ai', password: 'Admin123!' }),
-      });
-      if (loginRes.ok) {
-        const data = await loginRes.json();
-        useAppStore.getState().setUser(data.user, data.access_token);
-        return data.access_token;
-      }
-    } catch (e) {
-      console.warn('Auto-auth refresh failed:', e);
-    } finally {
-      refreshPromise = null;
-    }
-    return null;
-  })();
-  
-  return refreshPromise;
-}
-
-async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = useAppStore.getState().token;
   const headers = new Headers(options.headers || {});
   
@@ -61,12 +19,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
     headers,
   });
 
-  // Handle 401 Unauthorized with automatic session acquisition & transparent retry
-  if (response.status === 401 && !isRetry && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/demo/switch-role')) {
-    const newToken = await refreshAuthToken();
-    if (newToken) {
-      return request<T>(endpoint, options, true);
-    }
+  // Handle 401 Unauthorized: clear expired or invalid session credentials
+  if (response.status === 401) {
+    useAppStore.getState().setUser(null, null);
+    localStorage.removeItem('stockpilot_token');
   }
 
   if (!response.ok) {
@@ -131,6 +87,12 @@ export const api = {
     reportDamage: (body: any) => request<any>('/inventory/damage', { method: 'POST', body: JSON.stringify(body) }),
     cycleCount: (body: any) => request<any>('/inventory/cycle-count', { method: 'POST', body: JSON.stringify(body) }),
     resolveDiscrepancy: (body: any) => request<any>('/inventory/discrepancy/resolve', { method: 'POST', body: JSON.stringify(body) }),
+    reconcile: (warehouse_id: string, product_id?: string) => {
+      const search = new URLSearchParams();
+      search.set('warehouse_id', warehouse_id);
+      if (product_id) search.set('product_id', product_id);
+      return request<any>(`/inventory/reconcile?${search.toString()}`);
+    },
   },
 
   // Transfers
@@ -138,7 +100,25 @@ export const api = {
     list: () => request<any[]>('/transfers'),
     create: (body: any) => request<any>('/transfers', { method: 'POST', body: JSON.stringify(body) }),
     approveOrReject: (body: any) => request<any>('/transfers/approve', { method: 'POST', body: JSON.stringify(body) }),
+    dispatch: (body: any) => request<any>('/transfers/dispatch', { method: 'POST', body: JSON.stringify(body) }),
     receive: (body: any) => request<any>('/transfers/receive', { method: 'POST', body: JSON.stringify(body) }),
+    cancel: (body: any) => request<any>('/transfers/cancel', { method: 'POST', body: JSON.stringify(body) }),
+  },
+
+  // Warehouse Floor Tasks
+  tasks: {
+    list: (params?: { warehouse_id?: string; status?: string }) => {
+      const search = new URLSearchParams();
+      if (params?.warehouse_id && params.warehouse_id !== 'all') search.set('warehouse_id', params.warehouse_id);
+      if (params?.status) search.set('status', params.status);
+      const qs = search.toString();
+      return request<any[]>(`/tasks${qs ? `?${qs}` : ''}`);
+    },
+    complete: (taskId: string, body?: { notes?: string; scanned_units?: number; condition?: string }) =>
+      request<any>(`/tasks/${encodeURIComponent(taskId)}/complete`, {
+        method: 'POST',
+        body: JSON.stringify(body || {}),
+      }),
   },
 
   // Google OR-Tools Optimizer
@@ -146,6 +126,11 @@ export const api = {
     run: (body: any) => request<any>('/optimization/run', { method: 'POST', body: JSON.stringify(body) }),
     listRuns: () => request<any[]>('/optimization/runs'),
     getRun: (id: string) => request<any>(`/optimization/run/${id}`),
+    createTransferFromRecommendation: (run_id: string, recommendation_id: string, notes?: string) =>
+      request<any>('/optimization/create-transfer', {
+        method: 'POST',
+        body: JSON.stringify({ run_id, recommendation_id, notes }),
+      }),
   },
 
   // Demand Forecasting
@@ -175,5 +160,23 @@ export const api = {
   // Audit Logs
   audit: {
     list: (limit = 50) => request<any[]>(`/audit?limit=${limit}`),
+  },
+
+  // Express Lane Fast Fulfillment (Quick-Commerce Model)
+  express: {
+    getConfig: () => request<any>('/express/config'),
+    updateConfig: (body: any) => request<any>('/express/config', { method: 'POST', body: JSON.stringify(body) }),
+    getSosClocks: (sku = 'PRD-VAX-01') => request<any>(`/express/sos?sku=${sku}`),
+    evaluateOptions: (nodeId: string, sku: string, stock?: number, hour?: number) => {
+      const params = new URLSearchParams();
+      if (stock !== undefined) params.append('stock', stock.toString());
+      if (hour !== undefined) params.append('hour', hour.toString());
+      const qs = params.toString();
+      return request<any>(`/express/evaluate/${nodeId}/${sku}${qs ? `?${qs}` : ''}`);
+    },
+    rationContention: (items: any[]) => request<any>('/express/contention', { method: 'POST', body: JSON.stringify(items) }),
+    approve: (body: any) => request<any>('/express/approve', { method: 'POST', body: JSON.stringify(body) }),
+    getTransfers: () => request<any>('/express/transfers'),
+    simulate: () => request<any>('/express/simulate'),
   },
 };

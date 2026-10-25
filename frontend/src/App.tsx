@@ -16,6 +16,7 @@ import { QRScannerPage } from './pages/QRScannerPage';
 import { WhatsAppPage } from './pages/WhatsAppPage';
 import { UsersPage } from './pages/UsersPage';
 import { LoginPage } from './pages/LoginPage';
+import { ExpressLanePage } from './pages/ExpressLanePage';
 
 import { api } from './services/api';
 
@@ -34,7 +35,21 @@ export const App: React.FC = () => {
   useEffect(() => {
     const bootstrapAuth = async () => {
       const curToken = localStorage.getItem('stockpilot_token');
-      if (!curToken || curToken === 'demo_token') {
+      if (curToken && curToken !== 'demo_token') {
+        try {
+          const me = await api.auth.getMe();
+          setUser(me, curToken);
+        } catch (e) {
+          console.warn('Session verification failed, requesting authenticated session:', e);
+          try {
+            const activeRole = useAppStore.getState().activeRole || 'supply_chain_manager';
+            const res = await api.auth.switchRole(activeRole);
+            setUser(res.user, res.access_token);
+          } catch (err) {
+            console.warn('Initial session bootstrap fallback:', err);
+          }
+        }
+      } else {
         try {
           const activeRole = useAppStore.getState().activeRole || 'supply_chain_manager';
           const res = await api.auth.switchRole(activeRole);
@@ -109,6 +124,14 @@ export const App: React.FC = () => {
                       } 
                     />
                     <Route 
+                      path="/scanner" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'warehouse_manager', 'distributor', 'operator']}>
+                          <QRScannerPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
                       path="/whatsapp" 
                       element={
                         <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager']}>
@@ -121,6 +144,14 @@ export const App: React.FC = () => {
                       element={
                         <RoleGuard allowedRoles={['super_admin', 'org_admin']}>
                           <UsersPage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/express" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager']}>
+                          <ExpressLanePage />
                         </RoleGuard>
                       } 
                     />

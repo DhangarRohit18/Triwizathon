@@ -62,6 +62,12 @@ def create_access_token(subject: Union[str, Any], expires_delta: Optional[timede
 
 def decode_access_token(token: str) -> dict:
     if token and (token in ("demo_token", "demo_token_stockpilot") or token.startswith("demo_")):
+        if not settings.ALLOW_DEMO_MODE:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Demo authentication tokens are disabled.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         from app.core.database import db
         # If token specifies role like demo_operator, look up that role
         role_lookup = ROLE_SUPPLY_CHAIN_MANAGER
@@ -80,17 +86,24 @@ def decode_access_token(token: str) -> dict:
                 "org_id": user.get("org_id", "org_triwiz_01"),
                 "warehouse_id": user.get("warehouse_id"),
             }
-        return {
-            "sub": "usr_supplychain",
-            "email": "supplychain@stockpilot.ai",
-            "role": role_lookup,
-            "org_id": "org_triwiz_01",
-            "warehouse_id": "wh_chi_01",
-        }
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Demo persona record not found in system datastore.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        role = payload.get("role")
+        if role and role not in ALL_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid or unrecognized user role '{role}' in token claims",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return payload
+    except HTTPException:
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -102,10 +115,17 @@ def decode_access_token(token: str) -> dict:
         from app.services.firebase_service import FirebaseService
         fb_claims = FirebaseService.verify_token(token)
         if fb_claims:
+            fb_role = fb_claims.get("role")
+            if not fb_role or fb_role not in ALL_ROLES:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or unrecognized user role in token claims",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             return {
                 "sub": fb_claims.get("uid"),
                 "email": fb_claims.get("email"),
-                "role": fb_claims.get("role", ROLE_OPERATOR),
+                "role": fb_role,
                 "org_id": fb_claims.get("org_id", "org_triwiz_01"),
                 "warehouse_id": fb_claims.get("warehouse_id"),
             }

@@ -10,6 +10,8 @@ from app.api.v1.iot import router as iot_router
 from app.api.v1.whatsapp import router as whatsapp_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.extension import router as extension_router
+from app.api.v1.express import router as express_router
+from app.api.v1.tasks import router as tasks_router
 
 api_router = APIRouter()
 
@@ -24,3 +26,5 @@ api_router.include_router(iot_router)
 api_router.include_router(whatsapp_router)
 api_router.include_router(audit_router)
 api_router.include_router(extension_router)
+api_router.include_router(express_router)
+api_router.include_router(tasks_router)

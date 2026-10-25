@@ -26,19 +26,31 @@ class TransferRepository {
     final isApproved = approved ?? (action?.toUpperCase() == 'APPROVE');
     final finalNotes = rejectionReason ?? notes;
 
-    try {
-      await apiClient.post(
-        '/transfers/approve',
-        data: {
-          'transfer_id': transferId,
-          'approved': isApproved,
-          'notes': finalNotes,
-        },
-      );
-      return true;
-    } catch (_) {
-      return true;
-    }
+    final res = await apiClient.post(
+      '/transfers/approve',
+      data: {
+        'transfer_id': transferId,
+        'approved': isApproved,
+        'notes': finalNotes,
+      },
+    );
+    return res.statusCode == 200 || res.statusCode == 201;
+  }
+
+  Future<bool> createTransferFromRecommendation({
+    required String runId,
+    required String recommendationId,
+    String notes = '',
+  }) async {
+    final res = await apiClient.post(
+      '/optimization/create-transfer',
+      data: {
+        'run_id': runId,
+        'recommendation_id': recommendationId,
+        'notes': notes,
+      },
+    );
+    return res.statusCode == 200 || res.statusCode == 201;
   }
 
   List<TransferModel> _getDemoTransfers() {

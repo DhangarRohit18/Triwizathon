@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 import hashlib
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -121,6 +121,24 @@ class IoTTelemetryService:
         data_source = payload.get("data_source", "ESP32_HARDWARE")
         if is_simulated and "SIMULATOR" not in data_source.upper():
             data_source = "SIMULATOR_" + data_source
+        # Prevent duplicate reading ingestion for same device and timestamp
+        if raw_ts:
+            existing_dups = db.query(
+                "sensor_readings",
+                filters={"device_id": device_id, "timestamp": reading_ts},
+                org_id=auth_org_id
+            )
+            if existing_dups:
+                return {
+                    "status": "duplicate_ignored",
+                    "device_id": device_id,
+                    "timestamp": reading_ts,
+                    "is_duplicate": True,
+                    "message": "Duplicate telemetry reading already ingested for this timestamp.",
+                    "alerts_triggered_count": 0,
+                    "alerts_triggered": []
+                }
+
         reading_id = "read_" + uuid.uuid4().hex[:14]
         reading = {"id": reading_id, "device_id": device_id, "org_id": auth_org_id,
                    "warehouse_id": auth_warehouse_id, "storage_zone": storage_zone,
@@ -145,24 +163,32 @@ class IoTTelemetryService:
             max_hum = device.get("humidity_max_threshold", 65.0)
             if temp_c < min_thresh or temp_c > max_thresh:
                 sev = "critical" if (temp_c > max_thresh + 4.0 or temp_c < min_thresh - 5.0) else "warning"
-                alerts_triggered.append(cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
+                alt = cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
                     storage_zone, "temp_excursion", sev,
                     "Temperature breach in {}: {:.1f}C (Threshold: {}-{})".format(storage_zone, temp_c, min_thresh, max_thresh),
-                    temp_c, max_thresh if temp_c > max_thresh else min_thresh, now_iso))
+                    temp_c, max_thresh if temp_c > max_thresh else min_thresh, now_iso, is_simulated=is_simulated)
+                if alt:
+                    alerts_triggered.append(alt)
             if hum > max_hum:
-                alerts_triggered.append(cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
+                alt = cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
                     storage_zone, "humidity_breach", "warning",
                     "High humidity in {}: {:.1f}% (Limit: {:.1f}%)".format(storage_zone, hum, max_hum),
-                    hum, max_hum, now_iso))
+                    hum, max_hum, now_iso, is_simulated=is_simulated)
+                if alt:
+                    alerts_triggered.append(alt)
             if door_open:
-                alerts_triggered.append(cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
+                alt = cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
                     storage_zone, "door_ajar", "warning",
-                    "Storage bay door left open in {}!".format(storage_zone), 1.0, 0.0, now_iso))
+                    "Storage bay door left open in {}!".format(storage_zone), 1.0, 0.0, now_iso, is_simulated=is_simulated)
+                if alt:
+                    alerts_triggered.append(alt)
             if battery < LOW_BATTERY_THRESHOLD:
-                alerts_triggered.append(cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
+                alt = cls._create_alert(auth_org_id, auth_warehouse_id, device_id,
                     storage_zone, "low_battery", "warning",
                     "Device {} battery low: {:.0f}%".format(device_id, battery),
-                    battery, LOW_BATTERY_THRESHOLD, now_iso))
+                    battery, LOW_BATTERY_THRESHOLD, now_iso, is_simulated=is_simulated)
+                if alt:
+                    alerts_triggered.append(alt)
         return {"status": "ingested", "reading_id": reading_id, "device_id": device_id,
                 "warehouse_id": auth_warehouse_id, "temperature_c_stored": round(temp_c, 3),
                 "temperature_unit_received": temp_unit, "server_received_at": now_iso,
@@ -191,15 +217,34 @@ class IoTTelemetryService:
 
     @staticmethod
     def _create_alert(org_id, warehouse_id, device_id, storage_zone, alert_type, severity,
-                      message, reading_value, threshold_value, now_iso):
+                      message, reading_value, threshold_value, now_iso, is_simulated=False):
+        # Throttle duplicate unacknowledged alerts for the same condition on the same device
+        existing_alerts = db.query("alerts", filters={
+            "device_id": device_id,
+            "alert_type": alert_type,
+            "acknowledged": False
+        }, org_id=org_id)
+        if existing_alerts:
+            active = existing_alerts[0]
+            db.set_document("alerts", active["id"], {
+                "reading_value": reading_value,
+                "severity": severity,
+                "last_seen_at": now_iso,
+                "repeat_count": active.get("repeat_count", 1) + 1
+            })
+            return active
+
         alert_id = "alt_" + uuid.uuid4().hex[:12]
         alert = {"id": alert_id, "org_id": org_id, "warehouse_id": warehouse_id,
                  "device_id": device_id, "storage_zone": storage_zone,
                  "alert_type": alert_type, "severity": severity, "message": message,
                  "reading_value": reading_value, "threshold_value": threshold_value,
                  "timestamp": now_iso, "acknowledged": False,
-                 "acknowledged_by": None, "acknowledged_at": None}
+                 "acknowledged_by": None, "acknowledged_at": None,
+                 "is_simulated": is_simulated}
         db.set_document("alerts", alert_id, alert, merge=False)
+        from app.services.firebase_service import FirebaseService
+        FirebaseService.sync_to_firestore("alerts", alert_id, alert)
         return alert
 
     @classmethod
@@ -223,8 +268,16 @@ class IoTTelemetryService:
         if alert.get("acknowledged"):
             raise HTTPException(status_code=409,
                 detail="Alert {} already acknowledged by '{}'.".format(alert_id, alert.get("acknowledged_by")))
-        db.set_document("alerts", alert_id, {"acknowledged": True, "acknowledged_by": actor_name,
-            "acknowledged_by_id": actor_id, "acknowledged_at": datetime.now(timezone.utc).isoformat()})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updates = {
+            "acknowledged": True,
+            "acknowledged_by": actor_name,
+            "acknowledged_by_id": actor_id,
+            "acknowledged_at": now_iso
+        }
+        db.set_document("alerts", alert_id, updates)
+        from app.services.firebase_service import FirebaseService
+        FirebaseService.sync_to_firestore("alerts", alert_id, {**alert, **updates})
         return db.get_document("alerts", alert_id)
 
     @classmethod
@@ -245,3 +298,8 @@ class IoTTelemetryService:
         return {"status": "pruned", "org_id": org_id, "pruned_raw_readings": pruned_readings,
                 "pruned_hourly_aggregates": pruned_aggregates, "raw_cutoff_iso": raw_cutoff,
                 "hourly_cutoff_bucket": hourly_cutoff}
+
+
+# Compatibility alias
+IoTService = IoTTelemetryService
+

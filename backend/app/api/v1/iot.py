@@ -123,6 +123,7 @@ def ingest_telemetry(
     x_device_api_key: Optional[str] = Header(None, alias="X-Device-API-Key"),
     x_iot_key: Optional[str] = Header(None, alias="X-IoT-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
     dev_id = x_device_id or payload.device_id
     if not dev_id:
@@ -135,6 +136,8 @@ def ingest_telemetry(
     payload_dict["temperature"] = temp
     payload_dict["temperature_c"] = temp
     auth_key = x_device_api_key or x_iot_key or x_api_key or ""
+    if not auth_key and authorization and authorization.startswith("Bearer "):
+        auth_key = authorization.split("Bearer ")[1].strip()
     return IoTTelemetryService.ingest_reading(
         payload=payload_dict,
         auth_api_key=auth_key,
@@ -143,10 +146,23 @@ def ingest_telemetry(
 
 @router.post("/simulator/telemetry", summary="Simulator ingest for demo")
 @router.post("/simulator/inject", summary="Simulator inject for demo")
-def simulator_telemetry(payload: SimulatorPayload):
+def simulator_telemetry(
+    payload: SimulatorPayload,
+    current_user: dict = Depends(require_permission(PERM_ALERTS_MANAGE))
+):
+    if not settings.ALLOW_DEMO_MODE or settings.ENVIRONMENT.lower() in ("production", "prod"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="IoT telemetry simulation is disabled in production environments."
+        )
     temp = payload.temperature_c if payload.temperature_c is not None else payload.temperature
     if temp is None:
         raise HTTPException(status_code=400, detail="Temperature reading required.")
+
+    dev = db.get_document("iot_devices", payload.device_id)
+    if dev:
+        validate_warehouse_access(current_user, dev.get("warehouse_id"))
+
     payload_dict = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
     payload_dict["temperature"] = temp
     payload_dict["temperature_c"] = temp
@@ -159,6 +175,7 @@ def simulator_telemetry(payload: SimulatorPayload):
 
 @router.get("/devices", response_model=List[Dict[str, Any]], summary="List registered IoT devices")
 def list_iot_devices(current_user: dict = Depends(require_permission(PERM_IOT_READINGS_VIEW))):
+    from datetime import datetime, timezone
     org_id = current_user["org_id"]
     devices = db.query("iot_devices", org_id=org_id)
     
@@ -167,10 +184,54 @@ def list_iot_devices(current_user: dict = Depends(require_permission(PERM_IOT_RE
     if allowed is not None:
         devices = [d for d in devices if d.get("warehouse_id") in allowed]
 
+    now_utc = datetime.now(timezone.utc)
     enriched = []
     for d in devices:
+        last_ping = d.get("last_ping")
+        reporting_interval = d.get("reporting_interval_sec", 300)
+        stale_threshold = max(2 * reporting_interval, 600)  # at least 10 minutes
+
+        if not last_ping:
+            is_online = False
+            connectivity_status = "offline"
+            data_freshness_seconds = None
+            last_seen_text = "Never"
+        else:
+            try:
+                ping_dt = datetime.fromisoformat(last_ping.replace("Z", "+00:00"))
+                if ping_dt.tzinfo is None:
+                    ping_dt = ping_dt.replace(tzinfo=timezone.utc)
+                age_sec = (now_utc - ping_dt).total_seconds()
+                data_freshness_seconds = round(max(0.0, age_sec), 1)
+                if age_sec > stale_threshold:
+                    is_online = False
+                    connectivity_status = "stale"
+                    last_seen_text = f"{int(age_sec // 60)}m ago (stale)"
+                else:
+                    is_online = True
+                    connectivity_status = "online"
+                    last_seen_text = f"{int(age_sec)}s ago" if age_sec < 60 else f"{int(age_sec // 60)}m ago"
+            except Exception:
+                is_online = False
+                connectivity_status = "unknown"
+                data_freshness_seconds = None
+                last_seen_text = "Unknown"
+
+        if d.get("is_online") != is_online:
+            db.set_document("iot_devices", d["id"], {
+                "is_online": is_online,
+                "connectivity_status": connectivity_status
+            })
+
         wh = db.get_document("warehouses", d.get("warehouse_id", ""))
-        enriched.append({**d, "warehouse_name": wh["name"] if wh else d.get("warehouse_id")})
+        enriched.append({
+            **d,
+            "is_online": is_online,
+            "connectivity_status": connectivity_status,
+            "data_freshness_seconds": data_freshness_seconds,
+            "last_seen_text": last_seen_text,
+            "warehouse_name": wh["name"] if wh else d.get("warehouse_id")
+        })
     return enriched
 
 @router.get("/readings", response_model=List[Dict[str, Any]], summary="Get sensor readings")

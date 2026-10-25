@@ -6,8 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/task_model.dart';
-import '../../../data/services/local_storage_service.dart';
-import '../../inventory/providers/inventory_provider.dart';
+import '../providers/tasks_provider.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -19,54 +18,6 @@ class TasksScreen extends ConsumerStatefulWidget {
 class _TasksScreenState extends ConsumerState<TasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  // Local sample interactive tasks for warehouse floor operators
-  final List<WarehouseTaskModel> _tasks = [
-    WarehouseTaskModel(
-      id: 'TASK-REC-01',
-      title: 'Inbound Receipt: 500 vials Covaxin',
-      description: 'Verify cold-chain tamper seals and temperature loggers for Batch #8821',
-      type: TaskType.receiving,
-      status: 'PENDING',
-      priority: 'HIGH',
-      assignedTo: 'Warehouse Operator',
-      targetLocation: 'Zone A - Cold Room Bin 03',
-      createdAt: DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
-    ),
-    WarehouseTaskModel(
-      id: 'TASK-DISP-02',
-      title: 'Dispatch Order: Apollo Hospital Central',
-      description: 'Pick 200 vials Insulin Glargine (FEFO priority Batch #4412)',
-      type: TaskType.dispatch,
-      status: 'PENDING',
-      priority: 'HIGH',
-      assignedTo: 'Warehouse Operator',
-      targetLocation: 'Dock 2 - Outbound Staging',
-      createdAt: DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-    ),
-    WarehouseTaskModel(
-      id: 'TASK-COUNT-03',
-      title: 'Cycle Count: Biologics Storage Rack B',
-      description: 'Physical audit of Monoclonal Antibodies (SKU-MAB-ONC-04)',
-      type: TaskType.cycleCount,
-      status: 'PENDING',
-      priority: 'MEDIUM',
-      assignedTo: 'Warehouse Operator',
-      targetLocation: 'Zone B - Shelf 12',
-      createdAt: DateTime.now().subtract(const Duration(minutes: 45)).toIso8601String(),
-    ),
-    WarehouseTaskModel(
-      id: 'TASK-DMG-04',
-      title: 'Inspect Damaged Packaging: Adrenaline Ampoules',
-      description: 'Report seal damage and record batch discrepancy for Batch #9931',
-      type: TaskType.damage,
-      status: 'IN_PROGRESS',
-      priority: 'URGENT',
-      assignedTo: 'Warehouse Operator',
-      targetLocation: 'Quarantine Bay Q-01',
-      createdAt: DateTime.now().subtract(const Duration(minutes: 20)).toIso8601String(),
-    ),
-  ];
 
   @override
   void initState() {
@@ -80,224 +31,211 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     super.dispose();
   }
 
-  void _toggleTaskStatus(int index) {
-    setState(() {
-      final current = _tasks[index];
-      final newStatus = current.status == 'COMPLETED' ? 'PENDING' : 'COMPLETED';
-      _tasks[index] = WarehouseTaskModel(
-        id: current.id,
-        title: current.title,
-        description: current.description,
-        type: current.type,
-        status: newStatus,
-        priority: current.priority,
-        assignedTo: current.assignedTo,
-        targetLocation: current.targetLocation,
-        createdAt: current.createdAt,
-      );
-    });
+  Future<void> _completeTask(WarehouseTaskModel task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Confirm Task Completion', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold)),
+        content: Text('Mark "${task.title}" as completed on warehouse floor?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondaryLight)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.tealAccent, foregroundColor: Colors.white),
+            child: const Text('Complete Task'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(taskRepositoryProvider).completeTask(task.id);
+        ref.invalidate(tasksListProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Task "${task.title}" marked completed!'),
+              backgroundColor: AppColors.successGreen,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.errorRed),
+          );
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount = ref.watch(pendingSyncCountProvider);
+    final tasksAsync = ref.watch(tasksListProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.pureWhite,
       appBar: AppBar(
-        title: const Text('Warehouse Operations'),
+        title: const Text('Warehouse Operations & Tasks'),
+        backgroundColor: AppColors.primaryNavy,
+        foregroundColor: Colors.white,
+        elevation: 0,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.tealAccent,
+          indicatorWeight: 3,
           labelColor: AppColors.tealAccent,
-          unselectedLabelColor: AppColors.textSecondaryDark,
-          tabs: [
-            Tab(text: 'Floor Tasks (${_tasks.where((t) => t.status != "COMPLETED").length})'),
-            Tab(text: 'Sync Queue ($pendingCount)'),
+          unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          tabs: const [
+            Tab(text: 'Pending Tasks'),
+            Tab(text: 'Completed'),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Tab 1: Floor Tasks
-          ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: _tasks.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final task = _tasks[index];
-              final isDone = task.status == 'COMPLETED';
-
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceGraphite,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDone
-                        ? AppColors.borderGraphite
-                        : AppColors.tealAccent.withValues(alpha: 0.3),
-                  ),
+      body: tasksAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.tealAccent)),
+        error: (err, stack) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: AppColors.errorRed),
+                const SizedBox(height: 12),
+                Text('Failed to load tasks: $err', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.errorRed)),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => ref.invalidate(tasksListProvider),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryNavy),
+                  child: const Text('Retry'),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+          ),
+        ),
+        data: (tasks) {
+          final pending = tasks.where((t) => !t.isCompleted).toList();
+          final completed = tasks.where((t) => t.isCompleted).toList();
+
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTaskList(pending, isPending: true),
+              _buildTaskList(completed, isPending: false),
+            ],
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/scan'),
+        icon: const Icon(Icons.qr_code_scanner),
+        label: const Text('SCAN ITEM'),
+        backgroundColor: AppColors.tealAccent,
+        foregroundColor: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildTaskList(List<WarehouseTaskModel> list, {required bool isPending}) {
+    if (list.isEmpty) {
+      return EmptyState(
+        icon: isPending ? Icons.check_circle_outline : Icons.assignment_turned_in_outlined,
+        title: isPending ? 'No Pending Tasks' : 'No Completed Tasks Yet',
+        subtitle: isPending ? 'All warehouse operations are up to date' : 'Completed tasks will appear here',
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(tasksListProvider),
+      color: AppColors.tealAccent,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: list.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final task = list[index];
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.pureWhite,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.borderLight),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Checkbox(
-                      value: isDone,
-                      activeColor: AppColors.tealAccent,
-                      checkColor: AppColors.navyDark,
-                      onChanged: (_) => _toggleTaskStatus(index),
-                    ),
-                    const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                task.id,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                  color: AppColors.tealAccent,
-                                ),
-                              ),
-                              StatusBadge.status(status: task.status),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            task.title,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              decoration: isDone ? TextDecoration.lineThrough : null,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            task.description,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondaryDark,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on_outlined, size: 14, color: AppColors.tealAccent),
-                              const SizedBox(width: 4),
-                              Text(
-                                task.targetLocation,
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
-                              ),
-                            ],
-                          ),
-                        ],
+                      child: Text(
+                        task.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppColors.primaryNavy,
+                        ),
                       ),
                     ),
+                    StatusBadge.status(status: task.priority.toUpperCase()),
                   ],
                 ),
-              );
-            },
-          ),
-
-          // Tab 2: Sync Queue (Offline drafts)
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: LocalStorageService.getPendingSyncQueue(),
-            builder: (context, snapshot) {
-              final items = snapshot.data ?? [];
-              if (items.isEmpty) {
-                return const EmptyState(
-                  title: 'All operations synchronized',
-                  subtitle: 'No offline drafts or pending actions waiting in the sync queue.',
-                  icon: Icons.cloud_done_outlined,
-                );
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final draft = items[index];
-                  return Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceGraphite,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.warningAmber.withValues(alpha: 0.4)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              draft['action'] ?? 'PENDING_OPERATION',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.warningAmber,
-                              ),
-                            ),
-                            StatusBadge.status(status: 'DRAFT'),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Idempotency Key: ${draft['idempotency_key'] ?? "N/A"}',
-                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Timestamp: ${draft['timestamp'] ?? ""}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: const BoxDecoration(
-          color: AppColors.surfaceGraphite,
-          border: Border(top: BorderSide(color: AppColors.borderGraphite)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.tealAccent,
-                  foregroundColor: AppColors.navyDark,
+                const SizedBox(height: 6),
+                Text(
+                  task.description,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
                 ),
-                icon: const Icon(Icons.move_to_inbox),
-                label: const Text('RECEIVE STOCK'),
-                onPressed: () => context.push('/tasks/receive'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.infoBlue,
-                  foregroundColor: Colors.white,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 14, color: AppColors.tealAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      task.targetLocation,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primaryNavy),
+                    ),
+                    const Spacer(),
+                    if (isPending)
+                      ElevatedButton.icon(
+                        onPressed: () => _completeTask(task),
+                        icon: const Icon(Icons.check, size: 14),
+                        label: const Text('Complete', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.tealAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                      )
+                    else
+                      const Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 14, color: AppColors.successGreen),
+                          SizedBox(width: 4),
+                          Text('COMPLETED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.successGreen)),
+                        ],
+                      ),
+                  ],
                 ),
-                icon: const Icon(Icons.outbox),
-                label: const Text('DISPATCH STOCK'),
-                onPressed: () => context.push('/tasks/dispatch'),
-              ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

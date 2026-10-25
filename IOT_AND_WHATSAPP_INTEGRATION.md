@@ -1,4 +1,4 @@
-﻿# IoT & WhatsApp Integration Guide — StockPilot AI
+# IoT & WhatsApp Integration Guide — StockPilot AI
 
 ## Table of Contents
 1. [ESP32 IoT Telemetry](#1-esp32-iot-telemetry)
@@ -221,18 +221,19 @@ ESP32 → excursion alert → FastAPI → WhatsAppBotService._dispatch_outbound(
 
 ---
 
-### 2.3 Security Model
+### 2.3 Security Model & Boundary Guarantees
 
-| Mechanism | Implementation |
+| Mechanism | Production Behavior & Enforcement |
 |---|---|
-| **Signature validation** | `X-Hub-Signature-256` HMAC-SHA256 verified with `WHATSAPP_APP_SECRET`. Mandatory when secret is configured. |
-| **Message deduplication** | Meta message IDs stored in `processed_idempotency_keys`. Duplicate webhooks return `status: duplicate_ignored`. |
-| **Sender authorization** | `from` phone number normalized and looked up in `users` collection. Unknown senders receive security notice; no action is taken. |
-| **Consent management** | `STOP`/`UNSUBSCRIBE`/`OPTOUT` → `whatsapp_opted_in=false`. `START`/`SUBSCRIBE`/`OPTIN` → `whatsapp_opted_in=true`. |
-| **Role-based actions** | `APPROVE`/`REJECT` require `supply_chain_manager`, `warehouse_manager`, `org_admin`, or `super_admin`. |
-| **Double approval prevention** | `InventoryService.approve_or_reject_transfer` raises 409 if transfer is no longer `pending`. |
-| **Secret isolation** | WhatsApp tokens never appear in client code, QR payloads, or deep links. |
-| **Safe deep links** | Transfer links format: `https://app.stockpilot.ai/transfers?id=<TRF_ID>` — no secrets in URL. |
+| **Signature validation** | `X-Hub-Signature-256` HMAC-SHA256 verified with `WHATSAPP_APP_SECRET`. In production, if the secret is missing/mock or signature header is missing, the webhook **fails closed with HTTP 403 Forbidden**. |
+| **Simulator isolation** | The simulator endpoint (`POST /simulator/chat`) is **strictly forbidden in production** (`ENVIRONMENT=production` or `ALLOW_DEMO_MODE=false`). Non-super_admin callers cannot override `from_number` to spoof identities. |
+| **Strict Phone Normalization** | Sender phone numbers are strictly parsed to canonical E.164 (`+` followed by country code and subscriber digits). Suffix matching (e.g. last 10 digits) is **strictly disabled** to prevent cross-country-code identity collisions. |
+| **Self-Promotion Denial** | Role assignment (`ROLE <phone> <role>`) strictly prohibits administrators from modifying or elevating their own role, logging an immutable audit event upon attempt. |
+| **Facility-Scoped Transfer Control** | `APPROVE <TRF_ID>` and `REJECT <TRF_ID>` verify: (1) actual transfer exists in database, (2) tenant organization matches, (3) current status is in `requested` or `pending` (rejecting double-approval with 409), and (4) warehouse managers must be assigned to the source or destination facility. |
+| **Message Deduplication** | Meta message IDs are tracked in `processed_idempotency_keys`. Duplicate webhooks return `status: duplicate_ignored` without re-processing commands. |
+| **Sender Authorization** | Unknown senders receive an automated security guidance notice. Privileged commands (`APPROVE`, `ROLE`, `LINK`, `INVITE`) require registered user verification and explicit RBAC roles. |
+| **Standby vs Active Session** | When the optional Baileys Web bridge is offline, UI renders an honest Standby card with startup instructions. Fabricated QR codes or dummy pairing tokens are never rendered. |
+| **Safe Deep Links** | Deep links format: `https://app.stockpilot.ai/transfers?id=<TRF_ID>` — no secrets or auth tokens in URL. |
 
 ---
 

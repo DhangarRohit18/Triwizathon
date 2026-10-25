@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/iot_model.dart';
+import '../../../data/models/user_model.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/iot_provider.dart';
 
 class IotMonitorScreen extends ConsumerStatefulWidget {
@@ -176,14 +178,18 @@ class _IotMonitorScreenState extends ConsumerState<IotMonitorScreen>
                 ],
               ),
               StatusBadge.status(
-                status: isOnline ? 'ONLINE' : 'OFFLINE',
-                customColor: isOnline ? AppColors.successGreen : AppColors.textSecondaryDark,
+                status: d.isStale
+                    ? 'STALE'
+                    : (isOnline ? 'ONLINE' : 'OFFLINE'),
+                customColor: d.isStale
+                    ? AppColors.warningAmber
+                    : (isOnline ? AppColors.successGreen : AppColors.textSecondaryDark),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            '${d.locationDescription} • ${d.warehouseName}',
+            '${d.locationDescription} • ${d.warehouseName}${d.lastSeenText != null ? " • ${d.lastSeenText}" : ""}',
             style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
           ),
           const SizedBox(height: 14),
@@ -195,7 +201,7 @@ class _IotMonitorScreenState extends ConsumerState<IotMonitorScreen>
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.navyDark,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isBreach ? AppColors.errorRed : AppColors.borderGraphite,
@@ -230,7 +236,7 @@ class _IotMonitorScreenState extends ConsumerState<IotMonitorScreen>
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.navyDark,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.borderGraphite),
                   ),
@@ -266,6 +272,9 @@ class _IotMonitorScreenState extends ConsumerState<IotMonitorScreen>
   }
 
   Widget _buildAlertCard(BuildContext context, IoTAlertModel a) {
+    final user = ref.watch(authNotifierProvider).user;
+    final canManageAlerts = user?.hasPermission('alerts:manage') ?? (user?.role != UserRole.operator && user?.role != UserRole.distributor);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -295,6 +304,25 @@ class _IotMonitorScreenState extends ConsumerState<IotMonitorScreen>
                       color: AppColors.errorRed,
                     ),
                   ),
+                  if (a.isSimulated) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningAmber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.warningAmber.withValues(alpha: 0.4)),
+                      ),
+                      child: const Text(
+                        'SIMULATED',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.warningAmber,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               StatusBadge.status(
@@ -313,7 +341,7 @@ class _IotMonitorScreenState extends ConsumerState<IotMonitorScreen>
             'Device: ${a.deviceId} • Detected: ${a.timestamp.split("T").first}',
             style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
           ),
-          if (!a.acknowledged) ...[
+          if (!a.acknowledged && canManageAlerts) ...[
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,

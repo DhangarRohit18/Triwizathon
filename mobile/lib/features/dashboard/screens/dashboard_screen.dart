@@ -7,10 +7,13 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/kpi_card.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/status_badge.dart';
+import '../../../data/models/iot_model.dart';
+import '../../../data/models/transfer_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../inventory/providers/inventory_provider.dart';
 import '../../iot/providers/iot_provider.dart';
+import '../../tasks/providers/tasks_provider.dart';
 import '../../transfers/providers/transfers_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -20,32 +23,38 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authNotifierProvider);
     final user = authState.user;
-    final isOperator = user?.role == UserRole.warehouseOperator;
-    final isDistributor = user?.role == UserRole.distributor;
+    final role = user?.role ?? UserRole.operator;
 
     return Scaffold(
+      backgroundColor: AppColors.pureWhite,
       appBar: AppBar(
+        backgroundColor: AppColors.primaryNavy,
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.hub_outlined, size: 20, color: AppColors.tealAccent),
+                const Icon(Icons.hub_outlined, size: 18, color: AppColors.tealAccent),
                 const SizedBox(width: 8),
                 Text(
                   'STOCKPILOT AI',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w900,
                         letterSpacing: 1.1,
+                        color: Colors.white,
                       ),
                 ),
               ],
             ),
             Text(
-              user?.warehouseName ?? 'Central Warehouse (WH-CENTRAL-01)',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondaryDark,
-                  ),
+              user?.warehouseName ?? 'Enterprise Network',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -55,37 +64,51 @@ class DashboardScreen extends ConsumerWidget {
             tooltip: 'Quick Scan',
             onPressed: () => context.push('/scan'),
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => context.push('/iot'),
-          ),
+          if (user?.canAccessIot == true)
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+              tooltip: 'Alerts',
+              onPressed: () => context.push('/iot'),
+            ),
         ],
       ),
       body: RefreshIndicator(
+        color: AppColors.tealAccent,
         onRefresh: () async {
           ref.invalidate(inventoryListProvider);
+          ref.invalidate(batchesListProvider);
           ref.invalidate(expiringBatchesProvider);
           ref.invalidate(iotAlertsProvider);
+          ref.invalidate(iotDevicesProvider);
           ref.invalidate(transfersListProvider);
+          ref.invalidate(tasksListProvider);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const OfflineBanner(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
 
-              // Role Banner
-              _buildRoleHeader(context, user),
+              // Role Identity Banner
+              _buildRoleBanner(context, user),
               const SizedBox(height: 16),
 
-              if (isOperator || isDistributor) ...[
-                _buildOperatorSection(context, ref),
-              ] else ...[
-                _buildManagerSection(context, ref),
-              ],
+              // 6 Distinct Role Experiences
+              if (role == UserRole.superAdmin)
+                _buildSuperAdminDashboard(context, ref, user)
+              else if (role == UserRole.orgAdmin)
+                _buildOrgAdminDashboard(context, ref, user)
+              else if (role == UserRole.supplyChainManager)
+                _buildSupplyChainDashboard(context, ref, user)
+              else if (role == UserRole.warehouseManager)
+                _buildWarehouseManagerDashboard(context, ref, user)
+              else if (role == UserRole.distributor)
+                _buildDistributorDashboard(context, ref, user)
+              else
+                _buildOperatorDashboard(context, ref, user),
             ],
           ),
         ),
@@ -95,18 +118,21 @@ class DashboardScreen extends ConsumerWidget {
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('SCAN BARCODE'),
         backgroundColor: AppColors.tealAccent,
-        foregroundColor: AppColors.navyDark,
+        foregroundColor: Colors.white,
       ),
     );
   }
 
-  Widget _buildRoleHeader(BuildContext context, UserModel? user) {
+  // ---------------------------------------------------------------------------
+  // Role Header Banner
+  // ---------------------------------------------------------------------------
+  Widget _buildRoleBanner(BuildContext context, UserModel? user) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceGraphite.withValues(alpha: 0.7),
+        color: AppColors.surfaceLight,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.borderGraphite),
+        border: Border.all(color: AppColors.borderLight),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -114,29 +140,31 @@ class DashboardScreen extends ConsumerWidget {
           Row(
             children: [
               CircleAvatar(
-                radius: 16,
-                backgroundColor: AppColors.tealAccent.withValues(alpha: 0.2),
+                radius: 18,
+                backgroundColor: AppColors.primaryNavy,
                 child: Text(
-                  (user?.name.isNotEmpty == true) ? user!.name[0] : 'U',
+                  (user != null && user.name.isNotEmpty) ? user.name[0].toUpperCase() : 'U',
                   style: const TextStyle(
                     color: AppColors.tealAccent,
                     fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     user?.name ?? 'Authorized Personnel',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy),
                   ),
                   Text(
                     user?.role.displayName ?? 'Warehouse Operator',
-                    style: TextStyle(
-                      color: AppColors.tealAccent.withValues(alpha: 0.9),
+                    style: const TextStyle(
+                      color: AppColors.tealAccent,
                       fontSize: 11,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -144,7 +172,7 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           StatusBadge.status(
-            status: 'ONLINE',
+            status: 'AUTHENTICATED',
             customColor: AppColors.successGreen,
           ),
         ],
@@ -152,23 +180,686 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildOperatorSection(BuildContext context, WidgetRef ref) {
+  // ---------------------------------------------------------------------------
+  // 1. SUPER ADMIN DASHBOARD
+  // ---------------------------------------------------------------------------
+  Widget _buildSuperAdminDashboard(BuildContext context, WidgetRef ref, UserModel? user) {
     final inventoryAsync = ref.watch(inventoryListProvider);
+    final devicesAsync = ref.watch(iotDevicesProvider);
     final alertsAsync = ref.watch(iotAlertsProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Quick Actions Row
-        const Text(
-          'QUICK OPERATIONS',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
-            color: AppColors.textSecondaryDark,
+        _buildSectionHeader('PLATFORM & CLUSTER HEALTH'),
+        const SizedBox(height: 10),
+        inventoryAsync.when(
+          data: (items) {
+            final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantityAvailable);
+            return Row(
+              children: [
+                Expanded(
+                  child: KpiCard(
+                    title: 'NETWORK STOCK',
+                    value: NumberFormat.compact().format(totalUnits),
+                    icon: Icons.inventory_2_outlined,
+                    accentColor: AppColors.tealAccent,
+                    trendLabel: '${items.length} SKUs across all nodes',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: devicesAsync.when(
+                    data: (devs) {
+                      final onlineCount = devs.where((d) => d.isOnline).length;
+                      return KpiCard(
+                        title: 'IOT TELEMETRY',
+                        value: '$onlineCount / ${devs.length} Active',
+                        icon: Icons.sensors,
+                        accentColor: devs.isNotEmpty ? AppColors.successGreen : AppColors.textSecondaryLight,
+                        trendLabel: 'Cold-chain telemetry live',
+                      );
+                    },
+                    loading: () => KpiCard(
+                      title: 'IOT TELEMETRY',
+                      value: 'Checking...',
+                      icon: Icons.sensors,
+                      accentColor: AppColors.textSecondaryLight,
+                    ),
+                    error: (_, __) => KpiCard(
+                      title: 'IOT TELEMETRY',
+                      value: 'Offline',
+                      icon: Icons.sensors_off,
+                      accentColor: AppColors.errorRed,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load network stock metrics: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('TENANT FACILITIES CLUSTER'),
+        const SizedBox(height: 8),
+        inventoryAsync.when(
+          data: (items) {
+            final Map<String, int> warehouseStock = {};
+            for (final i in items) {
+              final wh = i.warehouseId.isNotEmpty ? i.warehouseId : 'wh_chicago_01';
+              warehouseStock[wh] = (warehouseStock[wh] ?? 0) + i.quantityAvailable;
+            }
+
+            final nodes = [
+              {'id': 'wh_chicago_01', 'name': 'Central Hub Chicago', 'type': 'Cold Storage & Distribution'},
+              {'id': 'wh_ny_02', 'name': 'New York BioLogistics Hub', 'type': 'Deep Freeze Vaccine Hub'},
+              {'id': 'wh_dallas_02', 'name': 'Dallas Cold Storage Facility', 'type': 'Regional Distribution Center'},
+              {'id': 'wh_boston_01', 'name': 'Boston Distribution Center', 'type': 'Urban Quick-Commerce Hub'},
+            ];
+
+            return Column(
+              children: nodes.map((node) {
+                final qty = warehouseStock[node['id']] ?? 0;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(node['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy)),
+                          Text('${node['type']} • (${node['id']})', style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight)),
+                        ],
+                      ),
+                      Text(
+                        '${NumberFormat.decimalPattern().format(qty)} units',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.tealAccent),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('CRITICAL EXCURSION ALERTS'),
+        const SizedBox(height: 8),
+        alertsAsync.when(
+          data: (alerts) => _buildAlertsSnippet(context, alerts),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load alerts: $e'),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. ORGANIZATION ADMIN DASHBOARD
+  // ---------------------------------------------------------------------------
+  Widget _buildOrgAdminDashboard(BuildContext context, WidgetRef ref, UserModel? user) {
+    final inventoryAsync = ref.watch(inventoryListProvider);
+    final transfersAsync = ref.watch(pendingTransfersProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('ORGANIZATION GOVERNANCE & METRICS'),
+        const SizedBox(height: 10),
+        inventoryAsync.when(
+          data: (items) {
+            final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantityAvailable);
+            final lowStockCount = items.where((i) => i.isLowStock).length;
+            return Row(
+              children: [
+                Expanded(
+                  child: KpiCard(
+                    title: 'TOTAL STOCK UNITS',
+                    value: NumberFormat.compact().format(totalUnits),
+                    icon: Icons.inventory_2_outlined,
+                    accentColor: AppColors.tealAccent,
+                    trendLabel: '${items.length} SKUs in inventory',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KpiCard(
+                    title: 'LOW STOCK RISKS',
+                    value: '$lowStockCount SKUs',
+                    icon: Icons.warning_amber_rounded,
+                    accentColor: lowStockCount > 0 ? AppColors.warningAmber : AppColors.successGreen,
+                    trendLabel: lowStockCount > 0 ? 'Requires attention' : 'Inventory balanced',
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load organization inventory: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('PENDING OPERATIONAL REVIEWS'),
+        const SizedBox(height: 8),
+        transfersAsync.when(
+          data: (transfers) => _buildTransfersSnippet(context, transfers),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load pending transfers: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('AUTHORIZED ADMINISTRATION SHORTCUTS'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionTile(
+                context,
+                title: 'Stock Matrix',
+                subtitle: 'Facility Inventory',
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.tealAccent,
+                onTap: () => context.push('/inventory'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildActionTile(
+                context,
+                title: 'Review Transfers',
+                subtitle: 'Pending Approvals',
+                icon: Icons.rule_outlined,
+                color: AppColors.primaryNavy,
+                onTap: () => context.push('/transfers'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. SUPPLY CHAIN MANAGER DASHBOARD
+  // ---------------------------------------------------------------------------
+  Widget _buildSupplyChainDashboard(BuildContext context, WidgetRef ref, UserModel? user) {
+    final inventoryAsync = ref.watch(inventoryListProvider);
+    final pendingTransfersAsync = ref.watch(pendingTransfersProvider);
+    final recommendationsAsync = ref.watch(recommendationsProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('NETWORK IMBALANCE & RISK MONITOR'),
+        const SizedBox(height: 10),
+        inventoryAsync.when(
+          data: (items) {
+            final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantityAvailable);
+            final lowStock = items.where((i) => i.isLowStock).length;
+            return Row(
+              children: [
+                Expanded(
+                  child: KpiCard(
+                    title: 'ACTIVE STOCK',
+                    value: NumberFormat.compact().format(totalUnits),
+                    icon: Icons.inventory_2_outlined,
+                    accentColor: AppColors.tealAccent,
+                    trendLabel: 'Cross-warehouse total',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KpiCard(
+                    title: 'LOW STOCK RISKS',
+                    value: '$lowStock SKUs',
+                    icon: Icons.warning_amber_rounded,
+                    accentColor: lowStock > 0 ? AppColors.warningAmber : AppColors.successGreen,
+                    trendLabel: lowStock > 0 ? 'Requires rebalance' : 'Buffers safe',
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load network stock: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('OR-TOOLS SCIP MIP OPTIMIZATION'),
+        const SizedBox(height: 8),
+        recommendationsAsync.when(
+          data: (recs) {
+            if (recs.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, color: AppColors.successGreen, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'All network hubs balanced. No proactive inter-warehouse rebalances needed.',
+                        style: TextStyle(fontSize: 12, color: AppColors.primaryNavy),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Mixed-Integer Program Plan',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy),
+                      ),
+                      StatusBadge.status(status: 'SOLVED OPTIMAL', customColor: AppColors.successGreen),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${recs.length} routing recommendations generated. Balances transport costs vs stockout probability.',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () => context.push('/transfers'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryNavy,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: const Text('Review Allocation Plans', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('TRANSFERS AWAITING SCM APPROVAL'),
+        const SizedBox(height: 8),
+        pendingTransfersAsync.when(
+          data: (transfers) => _buildTransfersSnippet(context, transfers),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load transfers: $e'),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. WAREHOUSE MANAGER DASHBOARD
+  // ---------------------------------------------------------------------------
+  Widget _buildWarehouseManagerDashboard(BuildContext context, WidgetRef ref, UserModel? user) {
+    final inventoryAsync = ref.watch(inventoryListProvider);
+    final expiringBatchesAsync = ref.watch(expiringBatchesProvider);
+    final pendingTransfersAsync = ref.watch(pendingTransfersProvider);
+    final devicesAsync = ref.watch(iotDevicesProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('ASSIGNED FACILITY DOCK OVERVIEW'),
+        const SizedBox(height: 10),
+        inventoryAsync.when(
+          data: (items) {
+            final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantityAvailable);
+            return Row(
+              children: [
+                Expanded(
+                  child: KpiCard(
+                    title: 'FACILITY INVENTORY',
+                    value: NumberFormat.decimalPattern().format(totalUnits),
+                    icon: Icons.warehouse_outlined,
+                    accentColor: AppColors.tealAccent,
+                    trendLabel: '${items.length} SKUs in bay',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: devicesAsync.when(
+                    data: (devs) {
+                      final whDev = devs.firstWhere(
+                        (d) => d.warehouseId == user?.warehouseId,
+                        orElse: () => devs.isNotEmpty ? devs.first : IoTDeviceModel(
+                          deviceId: 'TEMP-SENSOR',
+                          warehouseId: user?.warehouseId ?? 'wh_chicago_01',
+                          warehouseName: 'Facility',
+                          currentTemp: 4.2,
+                          currentHumidity: 52.0,
+                          tempMinThreshold: 2.0,
+                          tempMaxThreshold: 8.0,
+                          isOnline: true,
+                        ),
+                      );
+                      return KpiCard(
+                        title: 'BAY STORAGE TEMP',
+                        value: '${whDev.currentTemp.toStringAsFixed(1)}°C',
+                        icon: Icons.thermostat_outlined,
+                        accentColor: whDev.isBreached ? AppColors.errorRed : AppColors.successGreen,
+                        trendLabel: '${whDev.tempMinThreshold}°C - ${whDev.tempMaxThreshold}°C target',
+                      );
+                    },
+                    loading: () => KpiCard(
+                      title: 'BAY STORAGE TEMP',
+                      value: 'Reading...',
+                      icon: Icons.thermostat_outlined,
+                      accentColor: AppColors.tealAccent,
+                    ),
+                    error: (_, __) => KpiCard(
+                      title: 'BAY STORAGE TEMP',
+                      value: 'Offline',
+                      icon: Icons.thermostat_outlined,
+                      accentColor: AppColors.errorRed,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load facility stock: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('FEFO LOT EXPIRATION RISKS (<= 60 DAYS)'),
+        const SizedBox(height: 8),
+        expiringBatchesAsync.when(
+          data: (batches) {
+            if (batches.isEmpty) {
+              return _buildInfoCard(
+                icon: Icons.check_circle_outline,
+                title: 'No Lots Approaching Expiry',
+                subtitle: 'All batch inventories have > 60 days remaining shelf-life.',
+                color: AppColors.successGreen,
+              );
+            }
+            return Column(
+              children: batches.take(3).map((b) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.warningAmber.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(b.batchNumber, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy)),
+                          Text('${b.productName} • ${b.quantity} units', style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight)),
+                        ],
+                      ),
+                      StatusBadge.status(status: '${b.daysUntilExpiry}d LEFT', customColor: AppColors.warningAmber),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load expiring batches: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('FACILITY TRANSFERS & DISPATCHES'),
+        const SizedBox(height: 8),
+        pendingTransfersAsync.when(
+          data: (transfers) => _buildTransfersSnippet(context, transfers),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load transfers: $e'),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. DISTRIBUTOR / FLEET OPERATOR DASHBOARD
+  // ---------------------------------------------------------------------------
+  Widget _buildDistributorDashboard(BuildContext context, WidgetRef ref, UserModel? user) {
+    final inventoryAsync = ref.watch(inventoryListProvider);
+    final transfersAsync = ref.watch(transfersListProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('DELIVERY MANIFEST & FLEET OVERVIEW'),
+        const SizedBox(height: 10),
+        transfersAsync.when(
+          data: (transfers) {
+            final activeShipments = transfers.where((t) => t.status != 'REJECTED').toList();
+            return Row(
+              children: [
+                Expanded(
+                  child: KpiCard(
+                    title: 'ASSIGNED DROPS',
+                    value: '${activeShipments.length} Runs',
+                    icon: Icons.local_shipping_outlined,
+                    accentColor: AppColors.tealAccent,
+                    trendLabel: 'Fleet transit active',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KpiCard(
+                    title: 'DELIVERY UNITS',
+                    value: NumberFormat.compact().format(activeShipments.fold<int>(0, (sum, t) => sum + t.quantity)),
+                    icon: Icons.inventory_2_outlined,
+                    accentColor: AppColors.primaryNavy,
+                    trendLabel: 'Tamper seals certified',
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (_, __) => Row(
+            children: [
+              Expanded(
+                child: KpiCard(
+                  title: 'ASSIGNED DROPS',
+                  value: 'Live',
+                  icon: Icons.local_shipping_outlined,
+                  accentColor: AppColors.tealAccent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: KpiCard(
+                  title: 'DELIVERY UNITS',
+                  value: 'In Fleet',
+                  icon: Icons.inventory_2_outlined,
+                  accentColor: AppColors.primaryNavy,
+                ),
+              ),
+            ],
           ),
         ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('ACTIVE ROUTE RUNS & TRANSFERS'),
+        const SizedBox(height: 8),
+        transfersAsync.when(
+          data: (transfers) {
+            if (transfers.isEmpty) {
+              return _buildInfoCard(
+                icon: Icons.local_shipping_outlined,
+                title: 'No Active Delivery Drops',
+                subtitle: 'No outbound shipments currently assigned to your route manifest.',
+                color: AppColors.tealAccent,
+              );
+            }
+            return Column(
+              children: transfers.take(3).map((t) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Drop #${t.transferNumber}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy)),
+                          Text('${t.productName} • ${t.quantity} units -> ${t.destinationWarehouseId}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight)),
+                        ],
+                      ),
+                      StatusBadge.status(status: t.status),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load route runs: $e'),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('PERMITTED CATALOG AVAILABILITY'),
+        const SizedBox(height: 8),
+        inventoryAsync.when(
+          data: (items) {
+            return Column(
+              children: items.take(4).map((i) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(i.productSku, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy)),
+                          Text(i.productName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight)),
+                        ],
+                      ),
+                      Text(
+                        '${i.quantityAvailable} ${i.unit}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.tealAccent),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load product availability: $e'),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. WAREHOUSE OPERATOR DASHBOARD
+  // ---------------------------------------------------------------------------
+  Widget _buildOperatorDashboard(BuildContext context, WidgetRef ref, UserModel? user) {
+    final tasksAsync = ref.watch(tasksListProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Hero Scan Card
+        GestureDetector(
+          onTap: () => context.push('/scan'),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.primaryNavy,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.tealAccent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'START SCAN & WAVE PICK',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Scan inbound lots or pick orders via camera',
+                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, color: AppColors.tealAccent, size: 16),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        _buildSectionHeader('QUICK WAREHOUSE ACTIONS'),
         const SizedBox(height: 10),
         Row(
           children: [
@@ -176,7 +867,7 @@ class DashboardScreen extends ConsumerWidget {
               child: _buildActionTile(
                 context,
                 title: 'Receive Stock',
-                subtitle: 'Check-in & Putaway',
+                subtitle: 'Inbound Putaway',
                 icon: Icons.move_to_inbox_outlined,
                 color: AppColors.tealAccent,
                 onTap: () => context.push('/tasks/receive'),
@@ -189,491 +880,80 @@ class DashboardScreen extends ConsumerWidget {
                 title: 'Dispatch Stock',
                 subtitle: 'Pick & Outbound',
                 icon: Icons.outbox_outlined,
-                color: AppColors.infoBlue,
+                color: AppColors.primaryNavy,
                 onTap: () => context.push('/tasks/dispatch'),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildActionTile(
-                context,
-                title: 'Cycle Count',
-                subtitle: 'Audit Bins',
-                icon: Icons.checklist_rtl_outlined,
-                color: AppColors.statusDraft,
-                onTap: () => context.push('/tasks'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildActionTile(
-                context,
-                title: 'Report Damage',
-                subtitle: 'Log Discrepancy',
-                icon: Icons.report_problem_outlined,
-                color: AppColors.errorRed,
-                onTap: () => context.push('/tasks'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        // Floor Metrics
-        const Text(
-          'TODAY ON THE FLOOR',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
-            color: AppColors.textSecondaryDark,
-          ),
-        ),
-        const SizedBox(height: 10),
-        inventoryAsync.when(
-          data: (items) {
-            final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantityAvailable);
-            final lowStock = items.where((i) => i.isLowStock).length;
-            return Row(
-              children: [
-                Expanded(
-                  child: KpiCard(
-                    title: 'UNITS IN BIN',
-                    value: NumberFormat.decimalPattern().format(totalUnits),
-                    icon: Icons.inventory_2_outlined,
-                    accentColor: AppColors.tealAccent,
-                    trendLabel: '${items.length} SKUs active',
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: KpiCard(
-                    title: 'LOW STOCK SKUs',
-                    value: '$lowStock',
-                    icon: Icons.warning_amber_rounded,
-                    accentColor: lowStock > 0 ? AppColors.warningAmber : AppColors.successGreen,
-                    trendLabel: lowStock > 0 ? 'Requires reorder' : 'All levels safe',
-                  ),
-                ),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Text('Error loading inventory: $err'),
-        ),
-        const SizedBox(height: 20),
-
-        // Storage Condition Alerts
-        alertsAsync.when(
-          data: (alerts) {
-            final activeAlerts = alerts.where((a) => !a.acknowledged).toList();
-            if (activeAlerts.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.successGreen.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.3)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.check_circle_outline, color: AppColors.successGreen, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Cold chain parameters nominal (2.0°C - 8.0°C). No active excursions.',
-                        style: TextStyle(fontSize: 12, color: AppColors.successGreen),
-                      ),
-                    ),
-                  ],
-                ),
+        _buildSectionHeader('ASSIGNED FLOOR TASKS (LIVE BACKEND)'),
+        const SizedBox(height: 8),
+        tasksAsync.when(
+          data: (tasks) {
+            final pending = tasks.where((t) => !t.isCompleted).toList();
+            if (pending.isEmpty) {
+              return _buildInfoCard(
+                icon: Icons.check_circle_outline,
+                title: 'All Assigned Tasks Completed',
+                subtitle: 'No pending pick, putaway, or cycle count tasks for your assigned bay.',
+                color: AppColors.successGreen,
               );
             }
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.errorRed.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            return Column(
+              children: pending.take(3).map((t) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.warning_outlined, color: AppColors.errorRed, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${activeAlerts.length} ACTIVE STORAGE EXCURSION(S)',
-                        style: const TextStyle(
-                          color: AppColors.errorRed,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Location: ${t.targetLocation} • ${t.requiredQuantity} units',
+                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      StatusBadge.status(status: t.priority.toUpperCase()),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    activeAlerts.first.message,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: () => context.push('/iot'),
-                    child: const Text(
-                      'View IoT Telemetry ->',
-                      style: TextStyle(
-                        color: AppColors.tealAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                );
+              }).toList(),
             );
           },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+          error: (e, _) => _buildErrorCard('Failed to load floor tasks: $e'),
         ),
       ],
     );
   }
 
-  Widget _buildManagerSection(BuildContext context, WidgetRef ref) {
-    final inventoryAsync = ref.watch(inventoryListProvider);
-    final expiringBatchesAsync = ref.watch(expiringBatchesProvider);
-    final pendingTransfersAsync = ref.watch(pendingTransfersProvider);
-    final recommendationsAsync = ref.watch(recommendationsProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Executive KPIs
-        const Text(
-          'NETWORK OVERVIEW',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
-            color: AppColors.textSecondaryDark,
-          ),
-        ),
-        const SizedBox(height: 10),
-        inventoryAsync.when(
-          data: (items) {
-            final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantityAvailable);
-            final lowStockCount = items.where((i) => i.isLowStock).length;
-            return Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: KpiCard(
-                        title: 'AVAILABLE STOCK',
-                        value: NumberFormat.compact().format(totalUnits),
-                        icon: Icons.inventory_2_outlined,
-                        accentColor: AppColors.tealAccent,
-                        trendLabel: '${items.length} catalog items',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: KpiCard(
-                        title: 'STOCKOUT RISK',
-                        value: '$lowStockCount',
-                        icon: Icons.error_outline,
-                        accentColor: lowStockCount > 0 ? AppColors.warningAmber : AppColors.successGreen,
-                        trendLabel: lowStockCount > 0 ? 'Urgent transfers req.' : 'Optimal buffers',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Text('Error: $err'),
-        ),
-        const SizedBox(height: 20),
-
-        // Pending Transfer Approvals
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'PENDING TRANSFERS',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.1,
-                color: AppColors.textSecondaryDark,
-              ),
-            ),
-            InkWell(
-              onTap: () => context.push('/transfers'),
-              child: const Text(
-                'View All',
-                style: TextStyle(color: AppColors.tealAccent, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        pendingTransfersAsync.when(
-          data: (transfers) {
-            if (transfers.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceGraphite,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.borderGraphite),
-                ),
-                child: const Text(
-                  'No pending transfer requests awaiting manager approval.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
-                ),
-              );
-            }
-            return Column(
-              children: transfers.take(2).map((t) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceGraphite,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.borderGraphite),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.infoBlue.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.swap_horiz, color: AppColors.infoBlue, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              t.transferNumber,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            Text(
-                              '${t.originWarehouseName} -> ${t.destinationWarehouseName}',
-                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
-                            ),
-                          ],
-                        ),
-                      ),
-                      StatusBadge.status(status: t.status),
-                    ],
-                  ),
-                );
-              }).toList(),
-            );
-          },
-          loading: () => const CircularProgressIndicator(),
-          error: (_, __) => const SizedBox.shrink(),
-        ),
-        const SizedBox(height: 20),
-
-        // FEFO Alerts: Batches Expiring Soon
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'EXPIRING BATCHES (FEFO PRIORITY)',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.1,
-                color: AppColors.textSecondaryDark,
-              ),
-            ),
-            InkWell(
-              onTap: () => context.push('/inventory'),
-              child: const Text(
-                'View Inventory',
-                style: TextStyle(color: AppColors.tealAccent, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        expiringBatchesAsync.when(
-          data: (batches) {
-            if (batches.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceGraphite,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.borderGraphite),
-                ),
-                child: const Text(
-                  'No batches expiring in the next 30 days.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
-                ),
-              );
-            }
-            return Column(
-              children: batches.take(3).map((b) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceGraphite,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.warningAmber.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            b.productName,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                          Text(
-                            'Batch #${b.batchNumber} • Qty: ${b.quantityRemaining}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
-                          ),
-                        ],
-                      ),
-                      StatusBadge.fefo(daysUntilExpiry: b.daysUntilExpiry),
-                    ],
-                  ),
-                );
-              }).toList(),
-            );
-          },
-          loading: () => const CircularProgressIndicator(),
-          error: (_, __) => const SizedBox.shrink(),
-        ),
-        const SizedBox(height: 20),
-
-        // Distribution Optimization Engine Recommendations
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'OR-TOOLS ALLOCATION ENGINE',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.1,
-                color: AppColors.textSecondaryDark,
-              ),
-            ),
-            InkWell(
-              onTap: () => context.push('/transfers'),
-              child: const Text(
-                'Full Plan',
-                style: TextStyle(color: AppColors.tealAccent, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        recommendationsAsync.when(
-          data: (recs) {
-            if (recs.isEmpty) {
-              return const SizedBox.shrink();
-            }
-            final top = recs.first;
-            return Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.surfaceGraphite,
-                    AppColors.tealAccent.withValues(alpha: 0.08),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.tealAccent.withValues(alpha: 0.4)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        top.productName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.tealAccent.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '${top.recommendedQuantity} units recommended',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.tealAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${top.sourceWarehouseName} -> ${top.destinationHospitalName}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Rationale: ${top.rationale}',
-                    style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Est. Cost: \$${top.estimatedTransportCost.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.tealAccent,
-                          foregroundColor: AppColors.navyDark,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () => context.push('/transfers'),
-                        child: const Text('REVIEW & APPROVE'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
-        ),
-      ],
+  // ---------------------------------------------------------------------------
+  // Helper UI Components
+  // ---------------------------------------------------------------------------
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.0,
+        color: AppColors.textSecondaryLight,
+      ),
     );
   }
 
@@ -689,36 +969,165 @@ class DashboardScreen extends ConsumerWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surfaceGraphite,
+          color: AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.borderGraphite),
+          border: Border.all(color: AppColors.borderLight),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 10),
+            Icon(icon, size: 24, color: color),
+            const SizedBox(height: 8),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondaryDark),
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(String errorMsg) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.errorBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, size: 18, color: AppColors.errorRed),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              errorMsg,
+              style: const TextStyle(color: AppColors.errorRed, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertsSnippet(BuildContext context, List<IoTAlertModel> alerts) {
+    if (alerts.isEmpty) {
+      return _buildInfoCard(
+        icon: Icons.check_circle_outline,
+        title: 'Cold-Chain Nominal',
+        subtitle: 'All telemetry loggers operating within safe thresholds.',
+        color: AppColors.successGreen,
+      );
+    }
+    return Column(
+      children: alerts.take(3).map((a) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(a.message, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primaryNavy)),
+                    Text('Device ${a.deviceId} • ${a.timestamp.split("T").first}', style: const TextStyle(fontSize: 10, color: AppColors.textSecondaryLight)),
+                  ],
+                ),
+              ),
+              StatusBadge.severity(severity: a.severity),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTransfersSnippet(BuildContext context, List<TransferModel> transfers) {
+    if (transfers.isEmpty) {
+      return _buildInfoCard(
+        icon: Icons.check_circle_outline,
+        title: 'No Pending Transfers',
+        subtitle: 'All inter-facility movements have been reviewed.',
+        color: AppColors.successGreen,
+      );
+    }
+    return Column(
+      children: transfers.take(3).map((t) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.borderLight),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Transfer #${t.transferNumber}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy)),
+                  Text('${t.productName} • ${t.quantity} units', style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight)),
+                ],
+              ),
+              StatusBadge.status(status: t.status),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

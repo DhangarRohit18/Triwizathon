@@ -4,8 +4,10 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/status_badge.dart';
-import '../../inventory/providers/inventory_provider.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/inventory_repository.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../inventory/providers/inventory_provider.dart';
 
 class QrResolveSheet extends ConsumerStatefulWidget {
   final Map<String, dynamic> resolvedData;
@@ -451,7 +453,7 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  value: discType,
+                  initialValue: discType,
                   decoration: const InputDecoration(
                     labelText: 'Discrepancy Nature',
                     border: OutlineInputBorder(),
@@ -466,7 +468,7 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  value: resAction,
+                  initialValue: resAction,
                   decoration: const InputDecoration(
                     labelText: 'Resolution Action',
                     border: OutlineInputBorder(),
@@ -567,7 +569,7 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
                 _buildDialogInfo('Status', widget.resolvedData['status']?.toString() ?? 'in_transit'),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: condition,
+                  initialValue: condition,
                   decoration: const InputDecoration(
                     labelText: 'Cargo Condition',
                     border: OutlineInputBorder(),
@@ -635,6 +637,170 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
     });
   }
 
+  Future<void> _handleDeliveryReceiptAction() async {
+    final recipientController = TextEditingController(text: 'Metro Health Hospital - Receiving Dept');
+    final notesController = TextEditingController(text: 'Mobile QR Scan: Cargo received intact with verified seals.');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.verified, color: AppColors.tealAccent, size: 20),
+            SizedBox(width: 8),
+            Text('Confirm Delivery Receipt', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDialogInfo('Product', '$_productName ($_sku)'),
+              _buildDialogInfo('Batch #', _batchNumber),
+              _buildDialogInfo('Origin Hub', _warehouseId),
+              const SizedBox(height: 12),
+              TextField(
+                controller: recipientController,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery Destination / Recipient',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.business_outlined, size: 18),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Receipt Notes & Chain-of-Custody',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.notes, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.tealAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm Receipt'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final idempotencyKey = 'MOB-DIST-REC-${DateTime.now().millisecondsSinceEpoch}-${const Uuid().v4().substring(0, 6)}';
+
+    _executeOperation(() async {
+      final repo = ref.read(inventoryRepositoryProvider);
+      return await repo.dispatchStock(
+        warehouseId: _warehouseId,
+        productId: _productId,
+        destinationId: recipientController.text.trim(),
+        destinationHospitalId: recipientController.text.trim(),
+        quantity: 1,
+        batchNumber: _batchNumber,
+        batchId: _batchId,
+        reason: 'Distributor delivery confirmed: ${notesController.text.trim()}',
+        idempotencyKey: idempotencyKey,
+      );
+    });
+  }
+
+  Future<void> _handleDeliveryExceptionAction() async {
+    final qtyController = TextEditingController(text: '1');
+    final reasonController = TextEditingController(text: 'Transit excursion / cold chain packaging damaged');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.report_problem, color: AppColors.errorRed, size: 20),
+            SizedBox(width: 8),
+            Text('Report Delivery Exception', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDialogInfo('Product', '$_productName ($_sku)'),
+              _buildDialogInfo('Batch #', _batchNumber),
+              const SizedBox(height: 12),
+              TextField(
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Impacted Quantity',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.numbers, size: 18),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Exception Details / Seal Status',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warning_amber_rounded, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.errorRed,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Submit Exception'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final qty = int.tryParse(qtyController.text) ?? 1;
+    final reason = reasonController.text.trim();
+    final idempotencyKey = 'MOB-DIST-EXC-${DateTime.now().millisecondsSinceEpoch}-${const Uuid().v4().substring(0, 6)}';
+
+    _executeOperation(() async {
+      final repo = ref.read(inventoryRepositoryProvider);
+      return await repo.reportDamage(
+        warehouseId: _warehouseId,
+        productId: _productId,
+        batchId: _batchId,
+        batchNumber: _batchNumber,
+        damagedQuantity: qty,
+        damageReason: '[DISTRIBUTOR TRANSIT EXCEPTION] $reason',
+        idempotencyKey: idempotencyKey,
+      );
+    });
+  }
+
   // -------------------------------------------------------------
   // Execution wrapper
   // -------------------------------------------------------------
@@ -689,11 +855,18 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
   @override
   Widget build(BuildContext context) {
     final isTransfer = _resolvedType == 'transfer';
+    final user = ref.watch(authNotifierProvider).user;
+    final isDistributor = user?.role == UserRole.distributor;
+    final isSuperAdmin = user?.role == UserRole.superAdmin;
+    final isFacilityRestricted = user != null &&
+        (user.role == UserRole.operator || user.role == UserRole.warehouseManager) &&
+        user.warehouseIds.isNotEmpty &&
+        !user.canAccessWarehouse(_warehouseId);
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
-        color: AppColors.surfaceGraphite,
+        color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SingleChildScrollView(
@@ -724,7 +897,7 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
                     children: [
                       Text(
                         isTransfer ? 'Transfer Cargo Manifest' : _productName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.navyDark),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -745,9 +918,16 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.navyDark,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.borderGraphite),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -762,7 +942,7 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
                     isTransfer
                         ? (widget.resolvedData['target_warehouse']?['name']?.toString() ?? 'Assigned WH')
                         : _batchNumber,
-                    AppColors.textPrimaryDark,
+                    AppColors.navyDark,
                   ),
                   _buildMetricCol(
                     'LOCATION',
@@ -875,83 +1055,199 @@ class _QrResolveSheetState extends ConsumerState<QrResolveSheet> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16.0),
-                  child: CircularProgressIndicator(),
+                  child: CircularProgressIndicator(color: AppColors.tealAccent),
                 ),
               )
             else ...[
-              const Text(
-                'PROPOSED FLOOR ACTIONS',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                  color: AppColors.textSecondaryDark,
+              // Facility Restriction Warning
+              if (isFacilityRestricted) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningAmber.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.warningAmber),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_outline, color: AppColors.warningAmber, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'FACILITY BOUNDARY: This item is managed at warehouse "$_warehouseId". You are assigned to [${user.warehouseIds.join(", ")}]. Floor stock mutations are locked.',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.navyDark),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
+              ],
 
-              if (isTransfer) ...[
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.tealAccent,
-                    foregroundColor: AppColors.navyDark,
+              // Role-aware action dispatching
+              if (isSuperAdmin) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.tealAccent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.tealAccent.withValues(alpha: 0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.admin_panel_settings_outlined, color: AppColors.tealAccent, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'SUPER ADMIN AUDIT VIEW: Verified batch authenticity and ledger record. Operational mutations must be performed by assigned warehouse operators.',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.navyDark),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (isDistributor) ...[
+                const Text(
+                  'DISTRIBUTOR ACTIONS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                    color: AppColors.textSecondaryDark,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (isTransfer) ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.tealAccent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                    icon: const Icon(Icons.verified, size: 18),
+                    label: const Text('CONFIRM TRANSFER RECEIPT'),
+                    onPressed: _handleTransferReceiveAction,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.errorRed,
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                    icon: const Icon(Icons.report_problem, size: 18),
+                    label: const Text('REPORT TRANSIT EXCEPTION / TAMPER'),
+                    onPressed: _handleDeliveryExceptionAction,
+                  ),
+                ] else ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.tealAccent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                    icon: const Icon(Icons.task_alt, size: 18),
+                    label: const Text('CONFIRM DELIVERY RECEIPT'),
+                    onPressed: _handleDeliveryReceiptAction,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.errorRed,
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                    icon: const Icon(Icons.report_problem, size: 18),
+                    label: const Text('REPORT DELIVERY EXCEPTION / TAMPER'),
+                    onPressed: _handleDeliveryExceptionAction,
+                  ),
+                ],
+              ] else if (isFacilityRestricted) ...[
+                // Disabled floor actions with clear tooltip/explanation
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondaryDark,
                     minimumSize: const Size(double.infinity, 44),
                   ),
-                  icon: const Icon(Icons.assignment_turned_in, size: 18),
-                  label: const Text('ACKNOWLEDGE & RECEIVE TRANSFER'),
-                  onPressed: _handleTransferReceiveAction,
+                  icon: const Icon(Icons.lock, size: 18),
+                  label: const Text('MUTATIONS LOCKED (UNASSIGNED FACILITY)'),
+                  onPressed: null,
                 ),
               ] else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.tealAccent,
-                          foregroundColor: AppColors.navyDark,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.move_to_inbox, size: 18),
-                        label: const Text('RECEIVE'),
-                        onPressed: _handleReceiveAction,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.infoBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.outbox, size: 18),
-                        label: const Text('DISPATCH'),
-                        onPressed: _handleDispatchAction,
-                      ),
-                    ),
-                  ],
+                // Warehouse Operator, Warehouse Manager, Org Admin, Supply Chain Manager
+                const Text(
+                  'PROPOSED FLOOR ACTIONS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                    color: AppColors.textSecondaryDark,
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.checklist, size: 18),
-                        label: const Text('CYCLE COUNT'),
-                        onPressed: _handleCycleCountAction,
-                      ),
+                const SizedBox(height: 10),
+
+                if (isTransfer) ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.tealAccent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 44),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.errorRed),
-                        icon: const Icon(Icons.report_problem, size: 18),
-                        label: const Text('DAMAGE / DISC'),
-                        onPressed: _handleDamageAction,
+                    icon: const Icon(Icons.assignment_turned_in, size: 18),
+                    label: const Text('ACKNOWLEDGE & RECEIVE TRANSFER'),
+                    onPressed: _handleTransferReceiveAction,
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.tealAccent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.move_to_inbox, size: 18),
+                          label: const Text('RECEIVE'),
+                          onPressed: _handleReceiveAction,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryNavy,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.outbox, size: 18),
+                          label: const Text('DISPATCH'),
+                          onPressed: _handleDispatchAction,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.checklist, size: 18),
+                          label: const Text('CYCLE COUNT'),
+                          onPressed: _handleCycleCountAction,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(foregroundColor: AppColors.errorRed),
+                          icon: const Icon(Icons.report_problem, size: 18),
+                          label: const Text('DAMAGE / DISC'),
+                          onPressed: _handleDamageAction,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ],
           ],

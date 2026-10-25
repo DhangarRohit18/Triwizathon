@@ -110,16 +110,59 @@ class AppTheme {
         margin: EdgeInsets.zero,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimaryLight,
+        backgroundColor: AppColors.primaryNavy,
+        foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: AppColors.textPrimaryLight,
+          color: Colors.white,
           fontSize: 16,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.15,
         ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.pureWhite,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.borderLight),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.borderLight),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.tealAccent, width: 1.5),
+        ),
+        labelStyle: const TextStyle(color: AppColors.textSecondaryLight, fontSize: 13),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.tealAccent,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          elevation: 0,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primaryNavy,
+          minimumSize: const Size(double.infinity, 48),
+          side: const BorderSide(color: AppColors.borderLight),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ),
+      tabBarTheme: const TabBarThemeData(
+        indicatorColor: AppColors.tealAccent,
+        labelColor: AppColors.tealAccent,
+        unselectedLabelColor: Colors.white70,
+        indicatorSize: TabBarIndicatorSize.tab,
       ),
     );
   }

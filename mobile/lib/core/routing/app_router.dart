@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/models/user_model.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/profile_screen.dart';
@@ -29,6 +30,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
       if (isLoggedIn && isLoggingIn) {
         return '/dashboard';
+      }
+
+      // Strict role-aware route protection
+      if (isLoggedIn && authState.user != null) {
+        final user = authState.user!;
+        final path = state.matchedLocation;
+
+        // 1. Inbound/Outbound floor tasks restricted from distributor
+        if (path.startsWith('/tasks') && !user.canAccessTasks) {
+          return '/dashboard';
+        }
+
+        // 2. Transfers restricted from warehouse operator
+        if (path.startsWith('/transfers') && user.role == UserRole.operator) {
+          return '/dashboard';
+        }
+
+        // 3. IoT cold-chain telemetry restricted from operator and distributor
+        if (path.startsWith('/iot') && !user.canAccessIot) {
+          return '/dashboard';
+        }
       }
       return null;
     },
@@ -59,12 +81,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const TransfersScreen(),
           ),
           GoRoute(
+            path: '/iot',
+            builder: (context, state) => const IotMonitorScreen(),
+          ),
+          GoRoute(
             path: '/profile',
             builder: (context, state) => const ProfileScreen(),
           ),
         ],
       ),
-      // Full screen modal routes
+      // Full screen modal action routes
       GoRoute(
         path: '/scan',
         builder: (context, state) => const QrScanScreen(),
@@ -77,87 +103,113 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/tasks/dispatch',
         builder: (context, state) => const DispatchStockScreen(),
       ),
-      GoRoute(
-        path: '/iot',
-        builder: (context, state) => const IotMonitorScreen(),
-      ),
     ],
   );
 });
 
-class ScaffoldWithBottomNav extends StatelessWidget {
+class NavItemConfig {
+  final String path;
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+
+  const NavItemConfig({
+    required this.path,
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+  });
+}
+
+class ScaffoldWithBottomNav extends ConsumerWidget {
   final Widget child;
 
   const ScaffoldWithBottomNav({super.key, required this.child});
 
-  int _calculateSelectedIndex(BuildContext context) {
-    final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/dashboard')) return 0;
-    if (location.startsWith('/inventory')) return 1;
-    if (location.startsWith('/tasks')) return 2;
-    if (location.startsWith('/transfers')) return 3;
-    if (location.startsWith('/profile')) return 4;
-    return 0;
-  }
+  List<NavItemConfig> _getNavItems(UserRole role) {
+    switch (role) {
+      case UserRole.operator:
+        return const [
+          NavItemConfig(path: '/dashboard', label: 'Home', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard),
+          NavItemConfig(path: '/tasks', label: 'Pick & Tasks', icon: Icons.assignment_outlined, selectedIcon: Icons.assignment),
+          NavItemConfig(path: '/inventory', label: 'Hub Stock', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
+          NavItemConfig(path: '/profile', label: 'Profile', icon: Icons.person_outline, selectedIcon: Icons.person),
+        ];
 
-  void _onItemTapped(int index, BuildContext context) {
-    switch (index) {
-      case 0:
-        context.go('/dashboard');
-        break;
-      case 1:
-        context.go('/inventory');
-        break;
-      case 2:
-        context.go('/tasks');
-        break;
-      case 3:
-        context.go('/transfers');
-        break;
-      case 4:
-        context.go('/profile');
-        break;
+      case UserRole.distributor:
+        return const [
+          NavItemConfig(path: '/dashboard', label: 'Manifest', icon: Icons.local_shipping_outlined, selectedIcon: Icons.local_shipping),
+          NavItemConfig(path: '/inventory', label: 'Availability', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
+          NavItemConfig(path: '/transfers', label: 'Deliveries', icon: Icons.swap_horiz_outlined, selectedIcon: Icons.swap_horiz),
+          NavItemConfig(path: '/profile', label: 'Profile', icon: Icons.person_outline, selectedIcon: Icons.person),
+        ];
+
+      case UserRole.warehouseManager:
+        return const [
+          NavItemConfig(path: '/dashboard', label: 'Facility', icon: Icons.storefront_outlined, selectedIcon: Icons.storefront),
+          NavItemConfig(path: '/inventory', label: 'Batches', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
+          NavItemConfig(path: '/transfers', label: 'Transfers', icon: Icons.swap_horiz_outlined, selectedIcon: Icons.swap_horiz),
+          NavItemConfig(path: '/iot', label: 'Cold-Chain', icon: Icons.thermostat_outlined, selectedIcon: Icons.thermostat),
+          NavItemConfig(path: '/profile', label: 'Profile', icon: Icons.person_outline, selectedIcon: Icons.person),
+        ];
+
+      case UserRole.supplyChainManager:
+        return const [
+          NavItemConfig(path: '/dashboard', label: 'MIP Solver', icon: Icons.hub_outlined, selectedIcon: Icons.hub),
+          NavItemConfig(path: '/inventory', label: 'Network', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
+          NavItemConfig(path: '/transfers', label: 'Approvals', icon: Icons.rule_outlined, selectedIcon: Icons.rule),
+          NavItemConfig(path: '/iot', label: 'Telemetry', icon: Icons.thermostat_outlined, selectedIcon: Icons.thermostat),
+          NavItemConfig(path: '/profile', label: 'Profile', icon: Icons.person_outline, selectedIcon: Icons.person),
+        ];
+
+      case UserRole.orgAdmin:
+      case UserRole.superAdmin:
+        return const [
+          NavItemConfig(path: '/dashboard', label: 'Governance', icon: Icons.admin_panel_settings_outlined, selectedIcon: Icons.admin_panel_settings),
+          NavItemConfig(path: '/inventory', label: 'Matrix', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
+          NavItemConfig(path: '/iot', label: 'Excursions', icon: Icons.notifications_active_outlined, selectedIcon: Icons.notifications_active),
+          NavItemConfig(path: '/profile', label: 'Profile', icon: Icons.person_outline, selectedIcon: Icons.person),
+        ];
     }
   }
 
+  int _calculateIndex(String currentPath, List<NavItemConfig> items) {
+    for (int i = 0; i < items.length; i++) {
+      if (currentPath.startsWith(items[i].path)) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
   @override
-  Widget build(BuildContext context) {
-    final selectedIndex = _calculateSelectedIndex(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authNotifierProvider);
+    final role = auth.user?.role ?? UserRole.operator;
+    final navItems = _getNavItems(role);
+
+    final location = GoRouterState.of(context).matchedLocation;
+    final selectedIndex = _calculateIndex(location, navItems);
 
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (idx) => _onItemTapped(idx, context),
-        backgroundColor: AppColors.surfaceGraphite,
-        indicatorColor: AppColors.tealAccent.withValues(alpha: 0.2),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard, color: AppColors.tealAccent),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2, color: AppColors.tealAccent),
-            label: 'Inventory',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.assignment_outlined),
-            selectedIcon: Icon(Icons.assignment, color: AppColors.tealAccent),
-            label: 'Tasks',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.swap_horiz_outlined),
-            selectedIcon: Icon(Icons.swap_horiz, color: AppColors.tealAccent),
-            label: 'Transfers',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: AppColors.tealAccent),
-            label: 'Profile',
-          ),
-        ],
+        selectedIndex: selectedIndex.clamp(0, navItems.length - 1),
+        onDestinationSelected: (idx) {
+          if (idx >= 0 && idx < navItems.length) {
+            context.go(navItems[idx].path);
+          }
+        },
+        backgroundColor: AppColors.pureWhite,
+        elevation: 3,
+        indicatorColor: AppColors.tealAccent.withValues(alpha: 0.15),
+        destinations: navItems.map((item) {
+          return NavigationDestination(
+            icon: Icon(item.icon, color: AppColors.textSecondaryLight),
+            selectedIcon: Icon(item.selectedIcon, color: AppColors.tealAccent),
+            label: item.label,
+          );
+        }).toList(),
       ),
     );
   }

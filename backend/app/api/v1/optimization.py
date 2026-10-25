@@ -1,10 +1,11 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from app.core.database import db
-from app.models.domain import OptimizationRunRequest, OptimizationResult
+from app.models.domain import OptimizationRunRequest, OptimizationResult, TransferFromRecommendationRequest
 from app.api.deps import get_current_user, require_permission
-from app.core.permissions import PERM_OPTIMIZATION_RUN, PERM_OPTIMIZATION_REVIEW
+from app.core.permissions import PERM_OPTIMIZATION_RUN, PERM_OPTIMIZATION_REVIEW, PERM_TRANSFERS_CREATE
 from app.services.optimizer_engine import DistributionOptimizerEngine
+from app.services.inventory_service import InventoryService
 from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/optimization", tags=["Distribution Optimization Engine"])
@@ -52,3 +53,37 @@ def get_optimization_run(run_id: str, current_user: dict = Depends(require_permi
     if not run or run.get("org_id") != current_user["org_id"]:
         raise HTTPException(status_code=404, detail="Optimization run not found.")
     return OptimizationResult(**run)
+
+@router.post("/create-transfer")
+def create_transfer_from_recommendation(
+    req: TransferFromRecommendationRequest,
+    current_user: dict = Depends(require_permission(PERM_TRANSFERS_CREATE))
+):
+    """
+    Formalizes an optimization recommendation into an explicit Transfer request in REQUESTED state.
+    Reserves stock at the source warehouse and marks recommendation transferred to prevent double allocation.
+    """
+    transfer = InventoryService.create_transfer_from_recommendation(
+        req=req,
+        actor_id=current_user["id"],
+        actor_name=current_user["full_name"],
+        actor_role=current_user["role"],
+        org_id=current_user["org_id"]
+    )
+    AuditService.log_event(
+        org_id=current_user["org_id"],
+        actor_id=current_user["id"],
+        actor_name=current_user["full_name"],
+        actor_role=current_user["role"],
+        action="TRANSFER_CREATED_FROM_RECOMMENDATION",
+        target_entity="transfer",
+        entity_id=transfer["id"],
+        details={
+            "run_id": req.run_id,
+            "recommendation_id": req.recommendation_id,
+            "source_warehouse_id": transfer["source_warehouse_id"],
+            "target_warehouse_id": transfer["target_warehouse_id"],
+            "transfer_number": transfer["transfer_number"]
+        }
+    )
+    return transfer

@@ -54,6 +54,31 @@ class StatusBadge extends StatelessWidget {
     );
   }
 
+  factory StatusBadge.severity({required String severity}) {
+    final s = severity.toUpperCase();
+    if (s.contains('CRITICAL') || s.contains('HIGH') || s.contains('BREACH') || s.contains('URGENT')) {
+      return StatusBadge(
+        label: severity,
+        variant: BadgeVariant.error,
+        icon: Icons.warning_amber_rounded,
+        customColor: AppColors.errorRed,
+      );
+    } else if (s.contains('WARNING') || s.contains('MEDIUM')) {
+      return StatusBadge(
+        label: severity,
+        variant: BadgeVariant.warning,
+        icon: Icons.info_outline,
+        customColor: AppColors.warningAmber,
+      );
+    }
+    return StatusBadge(
+      label: severity,
+      variant: BadgeVariant.info,
+      icon: Icons.check_circle_outline,
+      customColor: AppColors.tealAccent,
+    );
+  }
+
   factory StatusBadge.storage({required String type}) {
     final t = type.toUpperCase();
     if (t.contains('COLD') || t.contains('FROZEN')) {

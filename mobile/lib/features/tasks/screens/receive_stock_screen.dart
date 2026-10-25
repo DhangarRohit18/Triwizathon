@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../data/models/inventory_model.dart';
+import '../../../data/models/user_model.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../inventory/providers/inventory_provider.dart';
 
 class ReceiveStockScreen extends ConsumerStatefulWidget {
@@ -17,49 +20,66 @@ class ReceiveStockScreen extends ConsumerStatefulWidget {
 class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  String _selectedProductId = 'PROD-COV-VAX-01';
-  String _selectedWarehouseId = 'WH-CENTRAL-01';
-  final _batchNumberController = TextEditingController(text: 'BN-${DateTime.now().millisecondsSinceEpoch % 100000}');
+  String? _selectedProductId;
+  String? _selectedWarehouseId;
+  final _batchNumberController = TextEditingController();
   final _quantityController = TextEditingController(text: '500');
-  final _unitCostController = TextEditingController(text: '18.50');
+  final _unitCostController = TextEditingController(text: '22.50');
+  final _storageBinController = TextEditingController(text: 'ZONE-A-BIN-01');
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 270));
 
   bool _isSubmitting = false;
   String? _errorMessage;
 
   @override
+  void initState() {
+    super.initState();
+    _batchNumberController.text = 'BN-${DateTime.now().millisecondsSinceEpoch % 100000}';
+  }
+
+  @override
   void dispose() {
     _batchNumberController.dispose();
     _quantityController.dispose();
     _unitCostController.dispose();
+    _storageBinController.dispose();
     super.dispose();
   }
 
   Future<void> _submitReceipt() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final user = ref.read(authNotifierProvider).user;
+    final warehouseId = _selectedWarehouseId ?? user?.warehouseId ?? 'wh_chicago_01';
+    final productId = _selectedProductId ?? 'prd_vax_01';
     final qty = int.tryParse(_quantityController.text) ?? 0;
     final cost = double.tryParse(_unitCostController.text) ?? 0.0;
     final batch = _batchNumberController.text.trim();
+    final storageBin = _storageBinController.text.trim();
     final idempotencyKey = const Uuid().v4();
 
     // Confirm predicted stock mutation with the user
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceGraphite,
-        title: const Text('Confirm Stock Inbound'),
+        backgroundColor: AppColors.pureWhite,
+        title: const Text(
+          'Confirm Stock Inbound',
+          style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Review predicted inventory ledger impact:',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
             ),
             const SizedBox(height: 12),
-            _buildConfirmationRow('Product ID', _selectedProductId),
+            _buildConfirmationRow('Product ID', productId),
+            _buildConfirmationRow('Warehouse', warehouseId),
             _buildConfirmationRow('Batch Number', batch),
+            _buildConfirmationRow('Storage Bin', storageBin),
             _buildConfirmationRow('Quantity', '+$qty units'),
             _buildConfirmationRow('Unit Cost', '\$${cost.toStringAsFixed(2)}'),
             _buildConfirmationRow('Expiry Date', DateFormat('yyyy-MM-dd').format(_expiryDate)),
@@ -69,12 +89,12 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondaryLight)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.tealAccent,
-              foregroundColor: AppColors.navyDark,
+              foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Confirm Receipt'),
@@ -92,10 +112,11 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
 
     try {
       final repo = ref.read(inventoryRepositoryProvider);
-      await repo.receiveStock(
-        productId: _selectedProductId,
-        warehouseId: _selectedWarehouseId,
+      final result = await repo.receiveStock(
+        productId: productId,
+        warehouseId: warehouseId,
         batchNumber: batch,
+        storageBin: storageBin,
         quantity: qty,
         unitCost: cost,
         expiryDate: _expiryDate.toIso8601String(),
@@ -108,15 +129,19 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Successfully received $qty units of $_selectedProductId (Batch: $batch)'),
-          backgroundColor: AppColors.successGreen,
+          content: Text(
+            result.isOfflineDraft
+                ? 'Receipt queued as offline draft. Will sync when reconnected.'
+                : 'Successfully received $qty units into $warehouseId (Batch: $batch)',
+          ),
+          backgroundColor: result.isOfflineDraft ? AppColors.warningAmber : AppColors.successGreen,
         ),
       );
       context.pop();
     } catch (e) {
       setState(() {
         _isSubmitting = false;
-        _errorMessage = e.toString();
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     }
   }
@@ -127,8 +152,8 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryDark)),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primaryNavy)),
         ],
       ),
     );
@@ -137,10 +162,17 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
   @override
   Widget build(BuildContext context) {
     final inventoryAsync = ref.watch(inventoryListProvider);
+    final user = ref.watch(authNotifierProvider).user;
+    final isRestrictedWarehouse = user?.role == UserRole.operator || user?.role == UserRole.warehouseManager;
+    final assignedWh = user?.warehouseId ?? 'wh_chicago_01';
 
     return Scaffold(
+      backgroundColor: AppColors.pureWhite,
       appBar: AppBar(
         title: const Text('Receive Goods (Putaway)'),
+        backgroundColor: AppColors.primaryNavy,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -152,7 +184,7 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.tealAccent.withValues(alpha: 0.1),
+                  color: AppColors.surfaceLight,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.tealAccent.withValues(alpha: 0.3)),
                 ),
@@ -163,7 +195,7 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                     Expanded(
                       child: Text(
                         'Every receipt mutation is validated with an idempotency key to prevent duplicate inventory movements.',
-                        style: TextStyle(fontSize: 12, color: AppColors.tealAccent),
+                        style: TextStyle(fontSize: 12, color: AppColors.primaryNavy),
                       ),
                     ),
                   ],
@@ -176,31 +208,62 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.errorRed.withValues(alpha: 0.15),
+                    color: AppColors.errorBg,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.errorRed),
+                    border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3)),
                   ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: AppColors.errorRed, fontSize: 13),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, size: 18, color: AppColors.errorRed),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: AppColors.errorRed, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
               // Product Selection
               const Text(
                 'PRODUCT SKU',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
               ),
               const SizedBox(height: 6),
               inventoryAsync.when(
                 data: (items) {
+                  final activeItems = items.isNotEmpty
+                      ? items
+                      : [
+                          InventoryItemModel(
+                            id: 'prd_vax_01',
+                            productId: 'prd_vax_01',
+                            productName: 'PneuVax mRNA-1273',
+                            productSku: 'PRD-VAX-01',
+                            handling: 'COLD_CHAIN',
+                            unit: 'vials',
+                            warehouseId: assignedWh,
+                            warehouseName: 'Central Hub',
+                            totalQuantity: 1000,
+                            availableQuantity: 850,
+                            reservedQuantity: 150,
+                            damagedQuantity: 0,
+                            safetyStock: 100,
+                            reorderPoint: 200,
+                          ),
+                        ];
+
+                  final currentVal = _selectedProductId ?? activeItems.first.productId;
+
                   return DropdownButtonFormField<String>(
-                    value: _selectedProductId,
+                    initialValue: activeItems.any((i) => i.productId == currentVal) ? currentVal : activeItems.first.productId,
                     decoration: const InputDecoration(border: OutlineInputBorder()),
-                    items: items.map((i) {
+                    items: activeItems.map((i) {
                       return DropdownMenuItem(
                         value: i.productId,
-                        child: Text('${i.productName} (${i.sku})', overflow: TextOverflow.ellipsis),
+                        child: Text('${i.productName} (${i.productSku})', overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -208,51 +271,99 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                     },
                   );
                 },
-                loading: () => const LinearProgressIndicator(),
+                loading: () => const LinearProgressIndicator(color: AppColors.tealAccent),
                 error: (_, __) => DropdownButtonFormField<String>(
-                  value: _selectedProductId,
+                  initialValue: _selectedProductId ?? 'prd_vax_01',
                   items: const [
-                    DropdownMenuItem(value: 'PROD-COV-VAX-01', child: Text('Covaxin Vaccine')),
-                    DropdownMenuItem(value: 'PROD-INS-GLA-02', child: Text('Insulin Glargine')),
+                    DropdownMenuItem(value: 'prd_vax_01', child: Text('PneuVax mRNA-1273 (PRD-VAX-01)')),
+                    DropdownMenuItem(value: 'prd_ins_02', child: Text('Insulin Glargine (PRD-INS-02)')),
+                    DropdownMenuItem(value: 'prd_adr_03', child: Text('Adrenaline Auto-Injector (PRD-ADR-03)')),
+                    DropdownMenuItem(value: 'prd_biscuit_01', child: Text('NutriBite Biscuits (PRD-BISCUIT-01)')),
                   ],
-                  onChanged: (val) => setState(() => _selectedProductId = val!),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedProductId = val);
+                  },
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Warehouse destination
+              // Receiving Facility
               const Text(
                 'RECEIVING FACILITY',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
               ),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _selectedWarehouseId,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'WH-CENTRAL-01', child: Text('Central Distribution Warehouse (Bengaluru)')),
-                  DropdownMenuItem(value: 'WH-NORTH-02', child: Text('North Regional Hub (Delhi)')),
-                  DropdownMenuItem(value: 'WH-WEST-03', child: Text('West Regional Hub (Mumbai)')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedWarehouseId = val);
-                },
-              ),
+              if (isRestrictedWarehouse)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_outline, size: 16, color: AppColors.textSecondaryLight),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          user?.warehouseName ?? 'Assigned Hub ($assignedWh)',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryNavy),
+                        ),
+                      ),
+                      Text(
+                        assignedWh,
+                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: AppColors.tealAccent, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedWarehouseId ?? assignedWh,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'wh_chicago_01', child: Text('Central Hub Chicago (wh_chicago_01)')),
+                    DropdownMenuItem(value: 'wh_ny_02', child: Text('New York BioLogistics (wh_ny_02)')),
+                    DropdownMenuItem(value: 'wh_dallas_02', child: Text('Dallas Cold Storage (wh_dallas_02)')),
+                    DropdownMenuItem(value: 'wh_boston_01', child: Text('Boston Distribution Hub (wh_boston_01)')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedWarehouseId = val);
+                  },
+                ),
               const SizedBox(height: 16),
 
               // Batch Number
               const Text(
                 'MANUFACTURER BATCH / LOT #',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
               ),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _batchNumberController,
                 decoration: const InputDecoration(
-                  hintText: 'e.g. BATCH-COV-9901',
+                  hintText: 'e.g. BN-VAX-2026-A1',
                   border: OutlineInputBorder(),
                 ),
                 validator: (val) => (val == null || val.trim().isEmpty) ? 'Batch number required' : null,
+              ),
+              const SizedBox(height: 16),
+
+              // Storage Bin
+              const Text(
+                'STORAGE LOCATION / BIN',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
+              ),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _storageBinController,
+                decoration: const InputDecoration(
+                  hintText: 'e.g. ZONE-A-BIN-01',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (val) => (val == null || val.trim().isEmpty) ? 'Storage bin required' : null,
               ),
               const SizedBox(height: 16),
 
@@ -265,7 +376,7 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                       children: [
                         const Text(
                           'QUANTITY (UNITS)',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -288,7 +399,7 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                       children: [
                         const Text(
                           'UNIT COST (\$)',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -311,7 +422,7 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
               // Expiry Date Picker
               const Text(
                 'BATCH EXPIRY DATE (FEFO ENFORCEMENT)',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryDark),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
               ),
               const SizedBox(height: 6),
               InkWell(
@@ -327,16 +438,16 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceGraphite,
+                    color: AppColors.surfaceLight,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.borderGraphite),
+                    border: Border.all(color: AppColors.borderLight),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         DateFormat('yyyy-MM-dd').format(_expiryDate),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primaryNavy),
                       ),
                       const Icon(Icons.calendar_today, size: 18, color: AppColors.tealAccent),
                     ],
@@ -352,14 +463,14 @@ class _ReceiveStockScreenState extends ConsumerState<ReceiveStockScreen> {
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.tealAccent,
-                    foregroundColor: AppColors.navyDark,
+                    foregroundColor: Colors.white,
                     textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   icon: _isSubmitting
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(color: AppColors.navyDark, strokeWidth: 2),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : const Icon(Icons.check_circle_outline),
                   label: Text(_isSubmitting ? 'VALIDATING WITH SERVER...' : 'CONFIRM INBOUND RECEIPT'),

@@ -259,8 +259,9 @@ class TestIoTIngestion:
                 alert_id=alert_id, actor_id="usr_admin", actor_name="Admin", org_id="org_triwiz_01")
         assert exc_info.value.status_code == 409
 
-    def test_simulator_endpoint_returns_simulated_flag(self):
+    def test_simulator_endpoint_returns_simulated_flag(self, monkeypatch):
         """Simulator endpoint must return is_simulated=True and simulator_note."""
+        monkeypatch.setattr(settings, "ALLOW_DEMO_MODE", True)
         headers = _admin_headers()
         payload = {"device_id": "esp32_test_01", "temperature_c": 5.0,
                    "humidity_percent": 50.0, "is_simulated": True}

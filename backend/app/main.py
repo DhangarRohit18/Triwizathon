@@ -28,13 +28,14 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS Middleware
+# CORS Middleware (Explicit Origins & Methods - No Wildcards with Credentials)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origin_regex=r"^chrome-extension://[a-z]{32}$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-IoT-Key", "X-Device-ID", "X-Device-API-Key", "X-API-Key", "X-Bridge-Key", "X-Extension-Key"],
 )
 
 # Mount API Router

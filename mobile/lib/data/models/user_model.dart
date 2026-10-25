@@ -26,8 +26,18 @@ enum UserRole {
         return UserRole.distributor;
       case 'operator':
       case 'warehouse_operator':
-      default:
         return UserRole.operator;
+      default:
+        throw FormatException('Unrecognized or invalid user role: $role');
+    }
+  }
+
+  static UserRole? tryFromString(String? role) {
+    if (role == null) return null;
+    try {
+      return fromString(role);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -79,9 +89,11 @@ class UserModel {
   final UserRole role;
   final String orgId;
   final String? warehouseId;
+  final List<String> warehouseIds;
   final String? warehouseNameVal;
   final String? phoneNumber;
   final bool isActive;
+  final List<String> permissions;
 
   UserModel({
     required this.id,
@@ -90,26 +102,109 @@ class UserModel {
     required this.role,
     required this.orgId,
     this.warehouseId,
+    this.warehouseIds = const [],
     this.warehouseNameVal,
     this.phoneNumber,
     this.isActive = true,
+    this.permissions = const [],
   });
 
   String get name => fullName.isNotEmpty ? fullName : email.split('@').first;
   String get organizationId => orgId;
-  String get warehouseName => warehouseNameVal ?? (warehouseId != null ? 'Warehouse ($warehouseId)' : 'Central Distribution Hub (Bengaluru)');
+
+  String get warehouseName {
+    if (warehouseNameVal != null && warehouseNameVal!.isNotEmpty) {
+      return warehouseNameVal!;
+    }
+    if (warehouseId != null && warehouseId!.isNotEmpty) {
+      return 'Facility ($warehouseId)';
+    }
+    if (role == UserRole.superAdmin || role == UserRole.orgAdmin || role == UserRole.supplyChainManager) {
+      return 'Network-Wide / Multi-Hub Scope';
+    }
+    if (role == UserRole.distributor) {
+      return 'Fleet Logistics & Distribution Hub';
+    }
+    return 'Unassigned Facility';
+  }
+
+  bool hasPermission(String perm) {
+    if (role == UserRole.superAdmin) return true;
+    return permissions.contains(perm);
+  }
+
+  bool get canApproveTransfers =>
+      role == UserRole.superAdmin ||
+      role == UserRole.orgAdmin ||
+      role == UserRole.supplyChainManager ||
+      role == UserRole.warehouseManager ||
+      hasPermission('transfers:approve');
+
+  bool get canMutateInventory =>
+      role != UserRole.distributor &&
+      (role == UserRole.operator ||
+          role == UserRole.warehouseManager ||
+          role == UserRole.orgAdmin ||
+          role == UserRole.superAdmin ||
+          hasPermission('inventory:receive') ||
+          hasPermission('inventory:dispatch'));
+
+  bool get canAccessIot =>
+      role == UserRole.superAdmin ||
+      role == UserRole.orgAdmin ||
+      role == UserRole.supplyChainManager ||
+      role == UserRole.warehouseManager ||
+      hasPermission('alerts:manage');
+
+  bool get canAccessTasks => role != UserRole.distributor;
+
+  bool canAccessWarehouse(String? whId) {
+    if (role == UserRole.superAdmin || role == UserRole.orgAdmin || role == UserRole.supplyChainManager) {
+      return true;
+    }
+    if (whId == null || whId.isEmpty) return false;
+    return warehouseId == whId || warehouseIds.contains(whId);
+  }
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final rawRole = json['role']?.toString();
+    if (rawRole == null || rawRole.isEmpty) {
+      throw const FormatException('Missing or null user role in backend response.');
+    }
+    final parsedRole = UserRole.fromString(rawRole);
+
+    final rawPerms = json['permissions'];
+    final permsList = <String>[];
+    if (rawPerms is List) {
+      for (final p in rawPerms) {
+        if (p != null) permsList.add(p.toString());
+      }
+    }
+
+    final rawWhIds = json['warehouse_ids'] ?? json['warehouseIds'];
+    final whList = <String>[];
+    if (rawWhIds is List) {
+      for (final w in rawWhIds) {
+        if (w != null) whList.add(w.toString());
+      }
+    }
+    final primaryWh = json['warehouse_id'] ?? json['warehouseId'];
+    if (primaryWh != null && !whList.contains(primaryWh.toString())) {
+      whList.add(primaryWh.toString());
+    }
+
     return UserModel(
       id: json['id'] ?? '',
       email: json['email'] ?? '',
       fullName: json['full_name'] ?? json['fullName'] ?? json['name'] ?? '',
-      role: UserRole.fromString(json['role'] ?? 'operator'),
+      role: parsedRole,
       orgId: json['org_id'] ?? json['orgId'] ?? json['organization_id'] ?? 'org_triwiz_01',
-      warehouseId: json['warehouse_id'] ?? json['warehouseId'],
+      warehouseId: primaryWh?.toString(),
+      warehouseIds: whList,
       warehouseNameVal: json['warehouse_name'] ?? json['warehouseName'],
       phoneNumber: json['phone_number'] ?? json['phoneNumber'],
       isActive: json['is_active'] ?? true,
+      permissions: permsList,
     );
   }
 
@@ -121,9 +216,11 @@ class UserModel {
       'role': role.apiValue,
       'org_id': orgId,
       'warehouse_id': warehouseId,
+      'warehouse_ids': warehouseIds,
       'warehouse_name': warehouseNameVal,
       'phone_number': phoneNumber,
       'is_active': isActive,
+      'permissions': permissions,
     };
   }
 }

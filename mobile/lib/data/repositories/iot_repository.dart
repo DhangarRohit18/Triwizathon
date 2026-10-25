@@ -27,12 +27,8 @@ class IoTRepository {
   }
 
   Future<bool> acknowledgeAlert(String alertId) async {
-    try {
-      await apiClient.post('/iot/alerts/$alertId/acknowledge');
-      return true;
-    } catch (_) {
-      return true;
-    }
+    final res = await apiClient.post('/iot/alerts/$alertId/acknowledge');
+    return res.statusCode == 200 || res.statusCode == 201;
   }
 
   List<IoTDeviceModel> _getDemoDevices() {

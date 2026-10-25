@@ -6,6 +6,9 @@ class IoTDeviceModel {
   final String deviceName;
   final String macAddress;
   final bool isOnline;
+  final String connectivityStatus; // online, stale, offline
+  final String? lastSeenText;
+  final int? dataFreshnessSeconds;
   final double currentTemp;
   final double currentHumidity;
   final double tempMinThreshold;
@@ -21,6 +24,9 @@ class IoTDeviceModel {
     this.deviceName = 'IoT Sentinel',
     this.macAddress = '',
     required this.isOnline,
+    this.connectivityStatus = 'online',
+    this.lastSeenText,
+    this.dataFreshnessSeconds,
     required this.currentTemp,
     required this.currentHumidity,
     this.tempMinThreshold = 2.0,
@@ -44,6 +50,7 @@ class IoTDeviceModel {
   String get locationDescription => storageZone;
   bool get isTempNormal => currentTemp >= tempMinThreshold && currentTemp <= tempMaxThreshold;
   bool get isBreached => !isTempNormal;
+  bool get isStale => connectivityStatus.toLowerCase() == 'stale';
 
   IoTDeviceModel copyWith({
     String? deviceId,
@@ -53,6 +60,9 @@ class IoTDeviceModel {
     String? deviceName,
     String? macAddress,
     bool? isOnline,
+    String? connectivityStatus,
+    String? lastSeenText,
+    int? dataFreshnessSeconds,
     double? currentTemp,
     double? currentHumidity,
     double? tempMinThreshold,
@@ -75,6 +85,9 @@ class IoTDeviceModel {
       deviceName: deviceName ?? this.deviceName,
       macAddress: macAddress ?? this.macAddress,
       isOnline: isOnline ?? this.isOnline,
+      connectivityStatus: connectivityStatus ?? this.connectivityStatus,
+      lastSeenText: lastSeenText ?? this.lastSeenText,
+      dataFreshnessSeconds: dataFreshnessSeconds ?? this.dataFreshnessSeconds,
       currentTemp: temperature ?? currentTemp ?? this.currentTemp,
       currentHumidity: humidity ?? currentHumidity ?? this.currentHumidity,
       tempMinThreshold: minTemp ?? tempMinThreshold ?? this.tempMinThreshold,
@@ -93,6 +106,9 @@ class IoTDeviceModel {
       deviceName: json['device_name'] ?? 'IoT Sentinel',
       macAddress: json['mac_address'] ?? '',
       isOnline: json['is_online'] ?? true,
+      connectivityStatus: json['connectivity_status'] ?? (json['is_online'] == false ? 'offline' : 'online'),
+      lastSeenText: json['last_seen_text'],
+      dataFreshnessSeconds: json['data_freshness_seconds'],
       currentTemp: (json['current_temp'] as num?)?.toDouble() ?? (json['temperature'] as num?)?.toDouble() ?? 0.0,
       currentHumidity: (json['current_humidity'] as num?)?.toDouble() ?? (json['humidity'] as num?)?.toDouble() ?? 0.0,
       tempMinThreshold: (json['temp_min_threshold'] as num?)?.toDouble() ?? (json['min_temp'] as num?)?.toDouble() ?? 2.0,
@@ -114,6 +130,7 @@ class IoTAlertModel {
   final String timestamp;
   final bool acknowledged;
   final String? acknowledgedBy;
+  final bool isSimulated;
 
   IoTAlertModel({
     required this.id,
@@ -126,6 +143,7 @@ class IoTAlertModel {
     required this.timestamp,
     required this.acknowledged,
     this.acknowledgedBy,
+    this.isSimulated = false,
   });
 
   bool get isCritical => severity.toLowerCase() == 'critical';
@@ -142,6 +160,7 @@ class IoTAlertModel {
       timestamp: json['timestamp'] ?? '',
       acknowledged: json['acknowledged'] ?? false,
       acknowledgedBy: json['acknowledged_by'],
+      isSimulated: json['is_simulated'] ?? false,
     );
   }
 }

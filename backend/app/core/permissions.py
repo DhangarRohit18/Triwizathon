@@ -53,6 +53,15 @@ ROLE_WAREHOUSE_OPERATOR = "warehouse_operator"
 ROLE_DISTRIBUTOR = "distributor"
 ROLE_DISTRIBUTOR_FIELD_OPERATOR = "distributor_field_operator"
 
+ALL_ROLES = [
+    ROLE_SUPER_ADMIN,
+    ROLE_ORG_ADMIN,
+    ROLE_SUPPLY_CHAIN_MANAGER,
+    ROLE_WAREHOUSE_MANAGER,
+    ROLE_DISTRIBUTOR,
+    ROLE_OPERATOR,
+]
+
 # =====================================================================
 # 2. DEFAULT PERMISSIONS PER ROLE
 # =====================================================================
@@ -70,6 +79,7 @@ ROLE_DEFAULT_PERMISSIONS: Dict[str, Set[str]] = {
         PERM_TRANSFERS_VIEW,
         PERM_OPTIMIZATION_APPROVE,
         PERM_SCANS_EXECUTE,
+        PERM_ALERTS_MANAGE,
     },
     ROLE_ORG_ADMIN: {
         PERM_USERS_MANAGE,
@@ -168,26 +178,34 @@ ROLE_DEFAULT_PERMISSIONS: Dict[str, Set[str]] = {
 # =====================================================================
 
 def normalize_role(role: Optional[str]) -> str:
-    """Normalize role string handling variations."""
+    """Normalize role string handling variations, rejecting unknown roles."""
     if not role:
-        return ROLE_OPERATOR
+        raise ValueError("User role is missing or null.")
     r = role.lower().strip()
     if r in (ROLE_WAREHOUSE_OPERATOR, "operator"):
         return ROLE_OPERATOR
     if r in (ROLE_DISTRIBUTOR_FIELD_OPERATOR, "distributor"):
         return ROLE_DISTRIBUTOR
-    return r
+    if r in (ROLE_SUPER_ADMIN, ROLE_ORG_ADMIN, ROLE_SUPPLY_CHAIN_MANAGER, ROLE_WAREHOUSE_MANAGER):
+        return r
+    raise ValueError(f"Invalid or unrecognized user role: '{role}'")
 
 def get_user_effective_permissions(user: Dict[str, Any]) -> Set[str]:
     """Calculate the full effective permissions for a user record."""
-    role = normalize_role(user.get("role"))
+    try:
+        role = normalize_role(user.get("role"))
+    except ValueError:
+        return set()
     defaults = ROLE_DEFAULT_PERMISSIONS.get(role, set())
     custom = set(user.get("permissions") or [])
     return defaults | custom
 
 def user_has_permission(user: Dict[str, Any], permission: str) -> bool:
     """Check if the user has an explicit permission."""
-    role = normalize_role(user.get("role"))
+    try:
+        role = normalize_role(user.get("role"))
+    except ValueError:
+        return False
     # Super Admin has platform-level permissions, but operational mutations still check rules
     effective = get_user_effective_permissions(user)
     return permission in effective
@@ -196,8 +214,13 @@ def get_authorized_warehouses(user: Dict[str, Any]) -> Optional[List[str]]:
     """
     Returns list of authorized warehouse IDs for this user.
     Returns None if the user has network-wide access (Super Admin, Org Admin, Supply Chain Manager).
+    Returns empty list [] if user is a facility-scoped role with no assigned facilities.
     """
-    role = normalize_role(user.get("role"))
+    try:
+        role = normalize_role(user.get("role"))
+    except ValueError:
+        return []
+
     if role in (ROLE_SUPER_ADMIN, ROLE_ORG_ADMIN, ROLE_SUPPLY_CHAIN_MANAGER):
         return None  # Unrestricted across org
 
@@ -209,10 +232,7 @@ def get_authorized_warehouses(user: Dict[str, Any]) -> Optional[List[str]]:
             if wid not in authorized:
                 authorized.append(wid)
 
-    # Fallback to Chicago default warehouse if none specified for local worker
-    if not authorized:
-        authorized = ["wh_chicago_01"]
-
+    # Unassigned local workers are strictly restricted (no silent Chicago fallback)
     return authorized
 
 def validate_warehouse_access(user: Dict[str, Any], target_warehouse_id: Optional[str]) -> None:
@@ -220,9 +240,16 @@ def validate_warehouse_access(user: Dict[str, Any], target_warehouse_id: Optiona
     Enforces location scoping: checks if the target warehouse is within the user's scope.
     Raises HTTP 403 if unauthorized.
     """
+    try:
+        role = normalize_role(user.get("role"))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Location access denied. User has an invalid or unrecognized role: '{user.get('role')}'"
+        )
+
     if not target_warehouse_id or target_warehouse_id == "all":
         # Check if user is allowed network-wide view
-        role = normalize_role(user.get("role"))
         if role in (ROLE_SUPER_ADMIN, ROLE_ORG_ADMIN, ROLE_SUPPLY_CHAIN_MANAGER):
             return
         authorized = get_authorized_warehouses(user)
@@ -232,7 +259,7 @@ def validate_warehouse_access(user: Dict[str, Any], target_warehouse_id: Optiona
         )
 
     allowed = get_authorized_warehouses(user)
-    if allowed is not None and target_warehouse_id not in allowed:
+    if allowed is not None and (not allowed or target_warehouse_id not in allowed):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Location access denied. You are not authorized for warehouse '{target_warehouse_id}'. Authorized: {allowed}"

@@ -55,6 +55,7 @@ class WarehouseTaskModel {
   });
 
   bool get isCompleted => status.toLowerCase() == 'completed';
+  int get requiredQuantity => expectedQuantity;
 
   factory WarehouseTaskModel.fromJson(Map<String, dynamic> json) {
     TaskType t = TaskType.receive;
@@ -72,11 +73,11 @@ class WarehouseTaskModel {
       type: t,
       title: json['title'] ?? 'Warehouse Task',
       description: json['description'] ?? '',
-      warehouseId: json['warehouse_id'] ?? 'WH-CENTRAL-01',
+      warehouseId: json['warehouse_id'] ?? 'wh_chicago_01',
       productId: json['product_id'],
       productName: json['product_name'],
       productSku: json['product_sku'],
-      expectedQuantity: json['expected_quantity'] ?? 100,
+      expectedQuantity: json['required_quantity'] ?? json['expected_quantity'] ?? 100,
       status: json['status'] ?? 'pending',
       priority: json['priority'] ?? 'standard',
       createdAt: json['created_at'] ?? '',

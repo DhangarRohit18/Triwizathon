@@ -23,21 +23,16 @@ console.log("\x1b[1m\x1b[32m  STOCKPILOT AI: WHATSAPP WEB LINKED DEVICE BRIDGE (
 console.log("\x1b[36m===============================================================\x1b[0m");
 console.log("Connects your personal or warehouse mobile via WhatsApp Web Linked Device QR Code.\n");
 
-// Dynamic resolver supporting local or Kurukshatra node_modules
+// Dynamic resolver supporting local workspace packages
 function resolveModule(moduleName) {
   try {
     return require(moduleName);
-  } catch {
+  } catch (err) {
     try {
-      const kurukshatraPath = path.resolve(__dirname, "../../Kurukshatra/node_modules", moduleName);
-      return require(kurukshatraPath);
+      const localPath = path.resolve(__dirname, "../node_modules", moduleName);
+      return require(localPath);
     } catch {
-      try {
-        const altPath = "C:/Users/user/OneDrive/Desktop/Competition/Kurukshatra/node_modules/" + moduleName;
-        return require(altPath);
-      } catch (err) {
-        throw new Error(`Could not resolve module '${moduleName}': ${err.message}`);
-      }
+      throw new Error(`Could not resolve module '${moduleName}'. Ensure dependencies are installed via npm.`);
     }
   }
 }
@@ -86,13 +81,31 @@ function updateStatusFile(data) {
   }
 }
 
+const LID_MAP_FILE = path.join(AUTH_FOLDER, "lid_phone_map.json");
+let lidPhoneMap = {};
+try {
+  if (fs.existsSync(LID_MAP_FILE)) {
+    lidPhoneMap = JSON.parse(fs.readFileSync(LID_MAP_FILE, "utf8"));
+  }
+} catch (e) {}
+
+function saveLidMap() {
+  try {
+    fs.writeFileSync(LID_MAP_FILE, JSON.stringify(lidPhoneMap, null, 2), "utf8");
+  } catch (e) {}
+}
+
 /**
  * Forward incoming WhatsApp message to StockPilot AI NLP engine
  */
-async function forwardToStockPilot(phone, name, text) {
+async function forwardToStockPilot(phone, name, text, isLid, senderLid) {
+  const fromNumber = phone ? (phone.startsWith("+") ? phone : `+${phone}`) : (senderLid || "unknown");
   const payload = JSON.stringify({
     message_text: text,
-    from_number: phone.startsWith("+") ? phone : `+${phone}`
+    from_number: fromNumber,
+    user_name: name,
+    sender_lid: senderLid || null,
+    is_lid: Boolean(isLid)
   });
 
   return new Promise((resolve) => {
@@ -107,7 +120,7 @@ async function forwardToStockPilot(phone, name, text) {
           headers: {
             "Content-Type": "application/json",
             "Content-Length": Buffer.byteLength(payload),
-            "Authorization": "Bearer demo_token"
+            "X-Bridge-Key": process.env.BRIDGE_API_SECRET || "stockpilot-baileys-bridge-internal-key-2026"
           },
           timeout: 8000
         },
@@ -329,6 +342,47 @@ async function startWhatsAppBridge() {
     }
   });
 
+  // Contact synchronization to resolve WhatsApp LIDs to real telephone numbers
+  sock.ev.on("contacts.upsert", (contacts) => {
+    for (const c of contacts) {
+      const cleanPhone = (c.id || "").replace("@s.whatsapp.net", "").replace(/[^0-9]/g, "");
+      const cleanLid = (c.lid || "").replace("@lid", "").replace(/[^0-9]/g, "");
+      if (cleanLid && cleanPhone && cleanPhone.length <= 13) {
+        lidPhoneMap[cleanLid] = cleanPhone;
+      }
+      if (cleanLid && (c.name || c.notify)) {
+        lidPhoneMap[`name_${cleanLid}`] = c.name || c.notify;
+      }
+    }
+    saveLidMap();
+  });
+
+  sock.ev.on("contacts.update", (contacts) => {
+    for (const c of contacts) {
+      const cleanPhone = (c.id || "").replace("@s.whatsapp.net", "").replace(/[^0-9]/g, "");
+      const cleanLid = (c.lid || "").replace("@lid", "").replace(/[^0-9]/g, "");
+      if (cleanLid && cleanPhone && cleanPhone.length <= 13) {
+        lidPhoneMap[cleanLid] = cleanPhone;
+      }
+      if (cleanLid && (c.name || c.notify)) {
+        lidPhoneMap[`name_${cleanLid}`] = c.name || c.notify;
+      }
+    }
+    saveLidMap();
+  });
+
+  sock.ev.on("chats.phoneNumberShare", ({ lid, jid }) => {
+    if (lid && jid) {
+      const cleanPhone = jid.replace("@s.whatsapp.net", "").replace(/[^0-9]/g, "");
+      const cleanLid = lid.replace("@lid", "").replace(/[^0-9]/g, "");
+      if (cleanLid && cleanPhone) {
+        lidPhoneMap[cleanLid] = cleanPhone;
+        saveLidMap();
+        console.log(`\x1b[32m[Baileys Contact Sync]\x1b[0m Resolved WhatsApp LID ${cleanLid} ➔ +${cleanPhone}`);
+      }
+    }
+  });
+
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
 
@@ -338,8 +392,22 @@ async function startWhatsAppBridge() {
       const remoteJid = msg.key.remoteJid || "";
       if (remoteJid.endsWith("@g.us") || remoteJid.includes("broadcast")) continue;
 
-      const phone = remoteJid.replace("@s.whatsapp.net", "").replace(/[^0-9]/g, "");
-      const profileName = msg.pushName || "Warehouse Operator";
+      const isLid = remoteJid.endsWith("@lid") || remoteJid.includes("@lid");
+      const rawId = remoteJid.replace("@s.whatsapp.net", "").replace("@lid", "").replace(/[^0-9]/g, "");
+      const profileName = msg.pushName || lidPhoneMap[`name_${rawId}`] || "Warehouse Operator";
+
+      let realPhone = null;
+      let senderLid = null;
+
+      if (isLid) {
+        senderLid = rawId;
+        // Check if we have this LID mapped to a real mobile number
+        if (lidPhoneMap[rawId]) {
+          realPhone = lidPhoneMap[rawId];
+        }
+      } else {
+        realPhone = rawId;
+      }
 
       const text =
         msg.message.conversation ||
@@ -349,12 +417,16 @@ async function startWhatsAppBridge() {
 
       if (!text) continue;
 
-      console.log(`\n\x1b[34m[Incoming WhatsApp Message]\x1b[0m From: ${profileName} (+${phone})`);
+      if (realPhone) {
+        console.log(`\n\x1b[34m[Incoming WhatsApp Message]\x1b[0m From: ${profileName} (+${realPhone})`);
+      } else {
+        console.log(`\n\x1b[34m[Incoming WhatsApp Message]\x1b[0m From: ${profileName} (WhatsApp Account: ${senderLid})`);
+      }
       console.log(`  Content: "${text}"`);
 
       updateStatusFile({
         lastIncomingMessage: {
-          phone,
+          phone: realPhone ? `+${realPhone}` : senderLid,
           name: profileName,
           text,
           timestamp: new Date().toISOString()
@@ -362,17 +434,28 @@ async function startWhatsAppBridge() {
       });
 
       // Forward to StockPilot AI NLP pipeline
-      const replyText = await forwardToStockPilot(phone, profileName, text);
+      const replyText = await forwardToStockPilot(realPhone, profileName, text, isLid, senderLid);
+
+      // If linking succeeded, save the mapping
+      if (replyText && replyText.includes("WhatsApp Account Linked Successfully")) {
+        const phoneMatch = replyText.match(/\+91\d{10}/);
+        if (phoneMatch && senderLid) {
+          const matchedClean = phoneMatch[0].replace(/[^0-9]/g, "");
+          lidPhoneMap[senderLid] = matchedClean;
+          saveLidMap();
+          console.log(`\x1b[32m  [LID Linked]\x1b[0m Persisted LID ${senderLid} ➔ +${matchedClean}`);
+        }
+      }
 
       if (replyText) {
         console.log(`\x1b[32m  [Replying via WhatsApp Web]\x1b[0m ${replyText.slice(0, 100)}...`);
         try {
           await sock.sendMessage(remoteJid, { text: replyText });
-          console.log(`\x1b[32m  ✓ Delivered to +${phone}\x1b[0m`);
+          console.log(`\x1b[32m  ✓ Delivered to ${profileName}${realPhone ? ` (+${realPhone})` : ""}\x1b[0m`);
 
           updateStatusFile({
             lastDeliveredReply: {
-              phone,
+              phone: realPhone ? `+${realPhone}` : senderLid,
               name: profileName,
               replyText: replyText.slice(0, 160),
               timestamp: new Date().toISOString()

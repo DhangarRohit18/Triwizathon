@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAppStore } from '../store/useAppStore';
 import { OptimizationResult, Warehouse } from '../types';
@@ -40,8 +41,43 @@ export const OptimizerPage: React.FC = () => {
   const [fuelMultiplier, setFuelMultiplier] = useState(1.0);
   const [fefoUrgency, setFefoUrgency] = useState(1.2);
   const [disruptedWhs, setDisruptedWhs] = useState<string[]>([]);
+  const [transferringRecId, setTransferringRecId] = useState<string | null>(null);
 
   const isRoleAllowed = ['super_admin', 'org_admin', 'supply_chain_manager'].includes(activeRole);
+
+  const handleCreateTransfer = async (rec: any) => {
+    if (!result) return;
+    setTransferringRecId(rec.id);
+    try {
+      const transfer = await api.optimization.createTransferFromRecommendation(
+        result.run_id,
+        rec.id,
+        `Created from OR-Tools optimization run ${result.run_id}`
+      );
+      setResult(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recommendations: prev.recommendations.map(r =>
+            r.id === rec.id ? { ...r, transferred: true, transfer_id: transfer.id } : r
+          ),
+        };
+      });
+      addToast({
+        type: 'info',
+        title: 'Transfer Request Created',
+        message: `Transfer ${transfer.transfer_number} created in REQUESTED state. Source inventory reserved.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Transfer Creation Failed',
+        message: err.message || 'Could not formalize transfer from recommendation.',
+      });
+    } finally {
+      setTransferringRecId(null);
+    }
+  };
 
   useEffect(() => {
     api.warehouses.list().then(setWarehouses).catch(console.error);
@@ -49,34 +85,17 @@ export const OptimizerPage: React.FC = () => {
     handleRunOptimization();
   }, []);
 
-  const handleElevateRole = async () => {
-    try {
-      const res = await api.auth.switchRole('supply_chain_manager');
-      setUser(res.user, res.access_token);
-      setActiveRole('supply_chain_manager');
-      addToast({
-        type: 'info',
-        title: 'Role Elevated to Supply Chain Manager',
-        message: 'Permission granted to execute Google OR-Tools MIP solver.'
-      });
-      return true;
-    } catch (e: any) {
-      addToast({ type: 'error', title: 'Elevation failed', message: e.message });
-      return false;
-    }
-  };
-
   const handleRunOptimization = async () => {
+    if (!isRoleAllowed) {
+      addToast({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Role permissions required: Supply Chain Manager, Org Admin, or Super Admin.',
+      });
+      return;
+    }
     setRunning(true);
     try {
-      // Auto-elevate role if currently operator or distributor to prevent RBAC 403 error
-      if (!isRoleAllowed) {
-        const ok = await handleElevateRole();
-        if (!ok) {
-          setRunning(false);
-          return;
-        }
-      }
 
       const res = await api.optimization.run({
         horizon_days: horizonDays,
@@ -136,14 +155,14 @@ export const OptimizerPage: React.FC = () => {
               Role Protection: You are signed in as <strong>{activeRole}</strong>. Running mathematical network optimization requires <strong>Supply Chain Manager</strong>, <strong>Org Admin</strong>, or <strong>Super Admin</strong>.
             </span>
           </div>
-          <TactileButton
-            variant="primary"
-            size="sm"
-            onClick={handleElevateRole}
-            className="shrink-0"
-          >
-            Switch to Supply Chain Manager
-          </TactileButton>
+          <Link to="/login" className="shrink-0">
+            <TactileButton
+              variant="outline"
+              size="sm"
+            >
+              Sign In as Manager
+            </TactileButton>
+          </Link>
         </div>
       )}
 
@@ -406,6 +425,7 @@ export const OptimizerPage: React.FC = () => {
                     <th className="text-right">Total Cost</th>
                     <th>Est. Hours</th>
                     <th>Allocation Rationale</th>
+                    <th className="text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono-num">
@@ -435,6 +455,28 @@ export const OptimizerPage: React.FC = () => {
                       </td>
                       <td className="font-sans text-[11px] text-slate-600 max-w-xs">
                         {rec.rationale}
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        {rec.transferred ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <RetroBadge variant="teal">Transferred</RetroBadge>
+                            <Link
+                              to="/transfers"
+                              className="text-[10px] text-[#0D9488] hover:underline font-mono"
+                            >
+                              View &rarr;
+                            </Link>
+                          </div>
+                        ) : (
+                          <TactileButton
+                            variant="primary"
+                            size="sm"
+                            disabled={transferringRecId === rec.id || !isRoleAllowed}
+                            onClick={() => handleCreateTransfer(rec)}
+                          >
+                            {transferringRecId === rec.id ? 'Reserving...' : 'Create Transfer'}
+                          </TactileButton>
+                        )}
                       </td>
                     </tr>
                   ))}

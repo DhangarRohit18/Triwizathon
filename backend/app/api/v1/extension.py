@@ -42,14 +42,29 @@ def get_extension_summary(
     - Distribution recommendation run summary & pending transfer approvals
     """
     org_id = current_user["org_id"]
-    assigned_wh_id = warehouse_id or current_user.get("warehouse_id") or "wh_chicago_01"
+    assigned_wh_id = warehouse_id or current_user.get("warehouse_id")
+    if not assigned_wh_id:
+        allowed = get_authorized_warehouses(current_user)
+        if allowed:
+            assigned_wh_id = allowed[0]
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="User account has no assigned warehouse facilities."
+            )
     
     # Enforce location scoping:
     validate_warehouse_access(current_user, assigned_wh_id)
     wh = db.get_document("warehouses", assigned_wh_id)
+    
+    allowed_whs = get_authorized_warehouses(current_user)
+    raw_warehouses = db.query("warehouses", org_id=org_id)
+    if allowed_whs is not None:
+        raw_warehouses = [w for w in raw_warehouses if w["id"] in allowed_whs]
+
     all_warehouses = [
         {"id": w["id"], "name": w["name"], "city": w.get("city", "")}
-        for w in db.query("warehouses", org_id=org_id)
+        for w in raw_warehouses
     ]
 
     # Inventory at assigned warehouse
@@ -107,13 +122,25 @@ def get_extension_summary(
                 pass
     expiry_alerts.sort(key=lambda x: x["days_remaining"])
 
-    # IoT Excursion Alerts
-    alerts = db.query("alerts", filters={"acknowledged": False}, org_id=org_id, order_by="timestamp", descending=True, limit=5)
+    # IoT Excursion Alerts (scoped by authorized facilities for warehouse managers)
+    raw_alerts = db.query("alerts", filters={"acknowledged": False}, org_id=org_id, order_by="timestamp", descending=True, limit=10)
+    if allowed_whs is not None:
+        alerts = [
+            a for a in raw_alerts
+            if not a.get("warehouse_id") or a.get("warehouse_id") in allowed_whs
+        ]
+    else:
+        alerts = raw_alerts
 
-    # Pending transfers
-    pending_transfers = db.query("transfers", filters={"status": "pending"}, org_id=org_id, limit=5)
+    # Pending transfers (scoped by authorized facilities)
+    pending_transfers = db.query("transfers", filters={"status": "pending"}, org_id=org_id, limit=10)
+    if allowed_whs is not None:
+        pending_transfers = [
+            t for t in pending_transfers
+            if t.get("source_warehouse_id") in allowed_whs or t.get("target_warehouse_id") in allowed_whs
+        ]
     formatted_pending = []
-    for t in pending_transfers:
+    for t in pending_transfers[:5]:
         src = db.get_document("warehouses", t.get("source_warehouse_id", ""))
         dst = db.get_document("warehouses", t.get("target_warehouse_id", ""))
         formatted_pending.append({
@@ -126,28 +153,29 @@ def get_extension_summary(
             "status": t.get("status")
         })
 
-    # Optimizer distribution summary
-    optimizer_runs = db.query("optimization_runs", org_id=org_id, order_by="created_at", descending=True, limit=1)
+    # Optimizer distribution summary (authoritative values only)
+    optimizer_runs = db.query("optimization_runs", org_id=org_id, order_by="timestamp", descending=True, limit=1)
+    if not optimizer_runs:
+        optimizer_runs = db.query("optimization_runs", org_id=org_id, order_by="created_at", descending=True, limit=1)
+    
     rec_summary = None
     if optimizer_runs:
         last_run = optimizer_runs[0]
+        opt_data = last_run.get("optimized", {})
+        savings_pct = last_run.get("savings_percent")
+        if savings_pct is None:
+            savings_pct = last_run.get("cost_savings_pct")
         rec_summary = {
-            "run_id": last_run.get("id"),
+            "run_id": last_run.get("run_id") or last_run.get("id"),
             "status": last_run.get("status", "completed"),
-            "created_at": last_run.get("created_at"),
-            "total_allocated": last_run.get("total_allocated_units", 0),
-            "total_cost": last_run.get("total_cost", 0.0),
-            "cost_savings_pct": last_run.get("cost_savings_pct", 14.8),
-            "unmet_demand_units": last_run.get("unmet_demand_units", 0)
+            "created_at": last_run.get("timestamp") or last_run.get("created_at"),
+            "total_allocated": opt_data.get("total_allocated_units") if opt_data.get("total_allocated_units") is not None else last_run.get("total_allocated_units"),
+            "total_cost": opt_data.get("total_modeled_cost") if opt_data.get("total_modeled_cost") is not None else last_run.get("total_cost"),
+            "cost_savings_pct": round(savings_pct, 1) if savings_pct is not None else None,
+            "unmet_demand_units": opt_data.get("stockout_units") if opt_data.get("stockout_units") is not None else last_run.get("unmet_demand_units", 0)
         }
     else:
-        # Fallback to current optimization metrics
-        rec_summary = {
-            "status": "ready",
-            "active_plans": len(pending_transfers),
-            "cost_savings_pct": 16.4,
-            "transport_model": "OR-Tools CBC / MILP Constrained"
-        }
+        rec_summary = None
 
     return {
         "user": {
@@ -168,7 +196,7 @@ def get_extension_summary(
         "low_stock_count": low_stock_count,
         "stockout_count": stockout_count,
         "stock": stock_summary[:12],
-        "active_alerts": alerts,
+        "active_alerts": alerts[:5],
         "expiry_alerts": expiry_alerts[:5],
         "pending_transfers": formatted_pending,
         "recommendations_summary": rec_summary,
@@ -230,5 +258,19 @@ def extension_approve_transfer(
         user_warehouse_id=current_user.get("warehouse_id"),
         org_id=current_user["org_id"],
         notes="Approved via Chrome Extension companion"
+    )
+
+@router.post("/acknowledge-alert/{alert_id}")
+def extension_acknowledge_alert(
+    alert_id: str,
+    current_user: dict = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """Allow operators and managers to acknowledge alerts directly from the extension."""
+    from app.services.iot_service import IoTTelemetryService
+    return IoTTelemetryService.acknowledge_alert(
+        alert_id=alert_id,
+        actor_id=current_user["id"],
+        actor_name=current_user.get("full_name") or current_user.get("email", "Operator"),
+        org_id=current_user["org_id"]
     )
 

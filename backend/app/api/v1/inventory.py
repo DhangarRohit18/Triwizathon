@@ -12,7 +12,8 @@ from app.models.domain import (
     StockAdjustmentRequest,
     DamageReportRequest,
     CycleCountRequest,
-    DiscrepancyResolutionRequest
+    DiscrepancyResolutionRequest,
+    InventoryReconciliationResult
 )
 from app.api.deps import (
     get_current_user,
@@ -371,3 +372,16 @@ def resolve_discrepancy(
         details={"action": req.resolution_action, "type": req.discrepancy_type, "delta": req.quantity_delta}
     )
     return res
+
+@router.get("/reconcile", response_model=InventoryReconciliationResult)
+def reconcile_inventory(
+    warehouse_id: str = Query(..., description="Target warehouse ID to reconcile"),
+    product_id: Optional[str] = Query(None, description="Optional product filter"),
+    current_user: dict = Depends(require_permission(PERM_INVENTORY_VIEW))
+):
+    validate_warehouse_access(current_user, warehouse_id)
+    return InventoryService.reconcile_inventory(
+        warehouse_id=warehouse_id,
+        org_id=current_user["org_id"],
+        product_id=product_id
+    )

@@ -9,95 +9,122 @@ class AuthRepository {
 
   AuthRepository({required this.apiClient, required this.prefs});
 
+  /// Restores cached authenticated user identity, or null if no session.
   UserModel? getCachedUser() {
     final token = prefs.getString(ApiConfig.keyAuthToken);
+    if (token == null || token.isEmpty || token == 'demo_bearer_token') {
+      return null;
+    }
+
     final roleStr = prefs.getString(ApiConfig.keyUserRole);
+    final role = UserRole.tryFromString(roleStr);
+    if (role == null) {
+      return null;
+    }
+
+    final id = prefs.getString('stockpilot_user_id') ?? 'usr_authenticated';
+    final email = prefs.getString('stockpilot_user_email') ?? '';
+    final fullName = prefs.getString('stockpilot_user_fullname') ?? '';
+    final orgId = prefs.getString('stockpilot_user_org_id') ?? ApiConfig.defaultOrgId;
     final whId = prefs.getString(ApiConfig.keyWarehouseId);
+    final whName = prefs.getString('stockpilot_user_wh_name');
+    final perms = prefs.getStringList('stockpilot_user_permissions') ?? const [];
+    final whIds = prefs.getStringList('stockpilot_user_warehouse_ids') ?? (whId != null ? [whId] : const []);
 
-    if (token == null || token.isEmpty) return null;
-
-    final role = UserRole.fromString(roleStr ?? 'operator');
     return UserModel(
-      id: 'cached_user',
-      email: role == UserRole.operator ? 'operator@stockpilot.ai' : 'warehouse.manager@stockpilot.ai',
-      fullName: role == UserRole.operator ? "James O'Connor" : 'David Sterling',
-      role: role,
-      orgId: ApiConfig.defaultOrgId,
-      warehouseId: whId ?? 'wh_chicago_01',
-    );
-  }
-
-  Future<UserModel> login({required String email, required String password}) async {
-    try {
-      final response = await apiClient.post(
-        '/auth/login',
-        data: {'email': email.trim().toLowerCase(), 'password': password},
-      );
-
-      final data = response.data as Map<String, dynamic>;
-      final token = data['access_token'] as String;
-      final userJson = data['user'] as Map<String, dynamic>;
-      final user = UserModel.fromJson(userJson);
-
-      await prefs.setString(ApiConfig.keyAuthToken, token);
-      await prefs.setString(ApiConfig.keyUserRole, user.role.apiValue);
-      if (user.warehouseId != null) {
-        await prefs.setString(ApiConfig.keyWarehouseId, user.warehouseId!);
-      }
-
-      return user;
-    } catch (_) {
-      // Offline fallback: if network fails during demo evaluation, allow seed credentials
-      return _demoLogin(email);
-    }
-  }
-
-  UserModel _demoLogin(String email) {
-    UserRole role = UserRole.operator;
-    String name = "James O'Connor";
-    String wh = 'wh_chicago_01';
-
-    if (email.contains('manager') || email.contains('wh')) {
-      role = UserRole.warehouseManager;
-      name = 'David Sterling';
-    } else if (email.contains('supply') || email.contains('chain')) {
-      role = UserRole.supplyChainManager;
-      name = 'Elena Rostova';
-      wh = 'all';
-    } else if (email.contains('distributor')) {
-      role = UserRole.distributor;
-      name = 'Rajiv Patel';
-    } else if (email.contains('admin')) {
-      role = UserRole.orgAdmin;
-      name = 'Marcus Vance';
-      wh = 'all';
-    }
-
-    final user = UserModel(
-      id: 'demo_${role.apiValue}',
+      id: id,
       email: email,
-      fullName: name,
+      fullName: fullName,
       role: role,
-      orgId: ApiConfig.defaultOrgId,
-      warehouseId: wh,
+      orgId: orgId,
+      warehouseId: whId,
+      warehouseIds: whIds,
+      warehouseNameVal: whName,
+      permissions: perms,
+    );
+  }
+
+  /// Authenticates credentials directly against backend /auth/login.
+  /// Never fabricates tokens or creates mock offline identities.
+  Future<UserModel> login({required String email, required String password}) async {
+    final response = await apiClient.post(
+      '/auth/login',
+      data: {'email': email.trim().toLowerCase(), 'password': password},
     );
 
-    prefs.setString(ApiConfig.keyAuthToken, 'demo_bearer_token');
-    prefs.setString(ApiConfig.keyUserRole, role.apiValue);
-    prefs.setString(ApiConfig.keyWarehouseId, wh);
+    final data = response.data as Map<String, dynamic>;
+    final token = data['access_token'] as String;
+    final userJson = data['user'] as Map<String, dynamic>;
+    final user = UserModel.fromJson(userJson);
+
+    await prefs.setString(ApiConfig.keyAuthToken, token);
+    await prefs.setString(ApiConfig.keyUserRole, user.role.apiValue);
+    await prefs.setString('stockpilot_user_id', user.id);
+    await prefs.setString('stockpilot_user_email', user.email);
+    await prefs.setString('stockpilot_user_fullname', user.fullName);
+    await prefs.setString('stockpilot_user_org_id', user.orgId);
+    await prefs.setStringList('stockpilot_user_permissions', user.permissions);
+    await prefs.setStringList('stockpilot_user_warehouse_ids', user.warehouseIds);
+
+    if (user.warehouseId != null && user.warehouseId!.isNotEmpty) {
+      await prefs.setString(ApiConfig.keyWarehouseId, user.warehouseId!);
+    } else {
+      await prefs.remove(ApiConfig.keyWarehouseId);
+    }
+
+    if (user.warehouseNameVal != null && user.warehouseNameVal!.isNotEmpty) {
+      await prefs.setString('stockpilot_user_wh_name', user.warehouseNameVal!);
+    } else {
+      await prefs.remove('stockpilot_user_wh_name');
+    }
 
     return user;
   }
 
-  Future<void> switchRole(UserRole newRole) async {
-    await prefs.setString(ApiConfig.keyUserRole, newRole.apiValue);
-    final wh = newRole == UserRole.operator ? 'wh_chicago_01' : 'wh_chicago_01';
-    await prefs.setString(ApiConfig.keyWarehouseId, wh);
+  /// Validates cached bearer token against the live server profile endpoint.
+  Future<UserModel?> validateSession() async {
+    final token = prefs.getString(ApiConfig.keyAuthToken);
+    if (token == null || token.isEmpty || token == 'demo_bearer_token') {
+      return null;
+    }
+
+    try {
+      final response = await apiClient.get('/auth/me');
+      final userJson = response.data as Map<String, dynamic>;
+      final user = UserModel.fromJson(userJson);
+
+      await prefs.setString(ApiConfig.keyUserRole, user.role.apiValue);
+      await prefs.setString('stockpilot_user_id', user.id);
+      await prefs.setString('stockpilot_user_email', user.email);
+      await prefs.setString('stockpilot_user_fullname', user.fullName);
+      await prefs.setString('stockpilot_user_org_id', user.orgId);
+      await prefs.setStringList('stockpilot_user_permissions', user.permissions);
+      await prefs.setStringList('stockpilot_user_warehouse_ids', user.warehouseIds);
+
+      if (user.warehouseId != null && user.warehouseId!.isNotEmpty) {
+        await prefs.setString(ApiConfig.keyWarehouseId, user.warehouseId!);
+      } else {
+        await prefs.remove(ApiConfig.keyWarehouseId);
+      }
+      return user;
+    } catch (_) {
+      // Invalid or expired token: clear session
+      await logout();
+      return null;
+    }
   }
 
+  /// Clears stored authentication session and credentials.
   Future<void> logout() async {
     await prefs.remove(ApiConfig.keyAuthToken);
     await prefs.remove(ApiConfig.keyUserRole);
     await prefs.remove(ApiConfig.keyWarehouseId);
+    await prefs.remove('stockpilot_user_id');
+    await prefs.remove('stockpilot_user_email');
+    await prefs.remove('stockpilot_user_fullname');
+    await prefs.remove('stockpilot_user_org_id');
+    await prefs.remove('stockpilot_user_wh_name');
+    await prefs.remove('stockpilot_user_permissions');
+    await prefs.remove('stockpilot_user_warehouse_ids');
   }
 }

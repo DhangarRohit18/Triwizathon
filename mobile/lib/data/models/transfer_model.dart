@@ -73,7 +73,12 @@ class TransferModel {
 
   String get originWarehouseName => sourceWarehouseName;
   String get destinationWarehouseName => targetWarehouseName;
+  String get destinationWarehouseId => targetWarehouseId;
   String? get rejectionReason => notes;
+
+  int get totalQuantity => items.fold<int>(0, (sum, i) => sum + i.quantity);
+  int get quantity => totalQuantity;
+  String get productName => items.isNotEmpty ? items.first.productName : 'Transfer Allocation';
 
   bool get isPending => status.toLowerCase().contains('pending');
   bool get isInTransit => status.toLowerCase().contains('transit');
