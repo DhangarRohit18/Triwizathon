@@ -45,13 +45,24 @@ def get_extension_summary(
     assigned_wh_id = warehouse_id or current_user.get("warehouse_id")
     if not assigned_wh_id:
         allowed = get_authorized_warehouses(current_user)
-        if allowed:
-            assigned_wh_id = allowed[0]
+        if allowed is not None:
+            if allowed:
+                assigned_wh_id = allowed[0]
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail="User account has no assigned warehouse facilities."
+                )
         else:
-            raise HTTPException(
-                status_code=403,
-                detail="User account has no assigned warehouse facilities."
-            )
+            # Network-wide role (super_admin, org_admin, supply_chain_manager)
+            org_whs = db.query("warehouses", org_id=org_id)
+            if org_whs:
+                assigned_wh_id = org_whs[0]["id"]
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No warehouses configured in organization."
+                )
     
     # Enforce location scoping:
     validate_warehouse_access(current_user, assigned_wh_id)
