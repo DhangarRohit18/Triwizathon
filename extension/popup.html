@@ -9,8 +9,11 @@
       --bg-white: #FFFFFF;
       --bg-light: #F8FAFC;
       --navy: #17324D;
+      --navy-light: #234668;
       --teal: #0D9488;
+      --teal-hover: #0F766E;
       --teal-light: #F0FDFA;
+      --slate-400: #94A3B8;
       --slate-500: #64748B;
       --slate-700: #334155;
       --slate-900: #0F172A;
@@ -18,24 +21,32 @@
       --border-dark: rgba(23, 50, 77, 0.12);
       --green-bg: #ECFDF5;
       --green-text: #059669;
+      --green-border: #A7F3D0;
       --amber-bg: #FFFBEB;
       --amber-text: #D97706;
+      --amber-border: #FDE68A;
       --rose-bg: #FFF1F2;
       --rose-text: #E11D48;
+      --rose-border: #FECDD3;
+      --blue-bg: #EFF6FF;
+      --blue-text: #2563EB;
+      --blue-border: #BFDBFE;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       width: 420px;
       min-height: 540px;
-      max-height: 600px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      max-height: 590px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background: var(--bg-white);
       color: var(--navy);
       font-size: 13px;
       line-height: 1.45;
       overflow-x: hidden;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Header */
@@ -49,6 +60,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     }
     .brand-wrap {
       display: flex;
@@ -61,6 +73,7 @@
       background: #10B981;
       border-radius: 50%;
       box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+      transition: background 0.3s;
     }
     .pulse-dot.offline {
       background: #EF4444;
@@ -103,14 +116,26 @@
       border: none;
       color: rgba(255, 255, 255, 0.8);
       cursor: pointer;
-      font-size: 14px;
-      padding: 3px 5px;
+      font-size: 13px;
+      padding: 3px 6px;
       border-radius: 4px;
-      transition: background 0.2s;
+      transition: background 0.2s, color 0.2s;
     }
     .icon-btn:hover {
       background: rgba(255, 255, 255, 0.15);
       color: #FFFFFF;
+    }
+
+    /* Sub-header status bar */
+    .sync-status-bar {
+      background: #0F2236;
+      padding: 3px 14px;
+      font-size: 10px;
+      color: var(--slate-400);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     /* Banners & Alerts */
@@ -124,28 +149,57 @@
       justify-content: space-between;
       border-bottom: 1px solid transparent;
     }
-    .banner.error { background: var(--rose-bg); color: var(--rose-text); border-color: rgba(225, 29, 72, 0.2); }
-    .banner.warning { background: var(--amber-bg); color: var(--amber-text); border-color: rgba(217, 119, 6, 0.2); }
-    .banner.success { background: var(--green-bg); color: var(--green-text); border-color: rgba(5, 150, 105, 0.2); }
-    .banner-btn {
-      background: var(--navy);
-      color: #fff;
+    .banner.error { background: var(--rose-bg); color: var(--rose-text); border-color: var(--rose-border); }
+    .banner.warning { background: var(--amber-bg); color: var(--amber-text); border-color: var(--amber-border); }
+    .banner.success { background: var(--green-bg); color: var(--green-text); border-color: var(--green-border); }
+    .banner.info { background: var(--blue-bg); color: var(--blue-text); border-color: var(--blue-border); }
+
+    /* Page Context Detection Banner */
+    .context-detected-bar {
+      background: #F0FDF4;
+      border-bottom: 1px solid #BBF7D0;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+    }
+    .context-detected-text {
+      color: #166534;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .context-action-btn {
+      background: #166534;
+      color: #FFFFFF;
       border: none;
       border-radius: 4px;
       padding: 3px 8px;
       font-size: 10px;
+      font-weight: 700;
       cursor: pointer;
+      white-space: nowrap;
+    }
+    .context-action-btn:hover { background: #14532D; }
+
+    /* Container Views */
+    .view-container {
+      padding: 12px 14px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* Container */
-    .view-container { padding: 14px; }
-
-    /* Auth View */
+    /* Auth Card */
     .auth-card {
       background: var(--bg-white);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px;
+      padding: 18px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     .auth-title {
       font-size: 15px;
@@ -156,7 +210,8 @@
     .auth-subtitle {
       font-size: 11px;
       color: var(--slate-500);
-      margin-bottom: 14px;
+      margin-bottom: 16px;
+      line-height: 1.4;
     }
     .form-group {
       margin-bottom: 12px;
@@ -177,7 +232,7 @@
       color: var(--navy);
       background: var(--bg-light);
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background 0.2s;
     }
     .form-control:focus {
       border-color: var(--teal);
@@ -195,23 +250,14 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    .btn-primary:hover { background: #0F766E; }
+    .btn-primary:hover { background: var(--teal-hover); }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* Host Config Toggle Box */
-    .host-toggle-row {
-      margin-top: 14px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11px;
-      color: var(--slate-500);
-    }
-    .host-input-wrap {
-      margin-top: 8px;
-      display: none;
+    /* Configuration Panel */
+    #configView {
+      background: var(--amber-bg);
+      border-bottom: 1px solid var(--amber-border);
+      padding: 12px 14px;
     }
 
     /* Facility / Warehouse Filter Row */
@@ -219,37 +265,37 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .facility-select {
       flex: 1;
-      padding: 7px 10px;
+      padding: 6px 10px;
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--bg-light);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--navy);
       outline: none;
     }
-    .facility-select:focus { border-color: var(--teal); }
+    .facility-select:focus { border-color: var(--teal); background: #FFF; }
 
     /* KPI Summary Row */
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .kpi-box {
       background: var(--bg-light);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 8px 4px;
+      padding: 6px 4px;
       text-align: center;
     }
     .kpi-val {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 800;
       color: var(--navy);
     }
@@ -258,35 +304,62 @@
       text-transform: uppercase;
       font-weight: 700;
       color: var(--slate-500);
-      margin-top: 2px;
+      margin-top: 1px;
     }
 
-    /* Role Context Banner */
-    .role-context-bar {
-      background: var(--teal-light);
-      border: 1px solid rgba(13, 148, 136, 0.25);
-      border-radius: 6px;
-      padding: 8px 10px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 11px;
+    /* Primary Search Bar */
+    .search-box-wrap {
+      margin-bottom: 10px;
+      position: relative;
     }
-    .role-context-title { font-weight: 700; color: var(--navy); }
-    .role-context-sub { color: var(--slate-500); font-size: 10px; }
+    .search-box-wrap input {
+      width: 100%;
+      padding: 8px 30px 8px 30px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+      color: var(--navy);
+      background: var(--bg-light);
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .search-box-wrap input:focus {
+      border-color: var(--teal);
+      background: #FFFFFF;
+      box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1);
+    }
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 8px;
+      font-size: 12px;
+      color: var(--slate-500);
+      pointer-events: none;
+    }
+    .search-clear-btn {
+      position: absolute;
+      right: 8px;
+      top: 7px;
+      background: none;
+      border: none;
+      color: var(--slate-400);
+      cursor: pointer;
+      font-size: 12px;
+      display: none;
+    }
+    .search-clear-btn:hover { color: var(--navy); }
 
     /* Tab Bar */
     .tab-bar {
       display: flex;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       background: var(--bg-light);
       border-radius: 6px 6px 0 0;
     }
     .tab-btn {
       flex: 1;
-      padding: 8px 4px;
+      padding: 7px 4px;
       border: none;
       background: transparent;
       font-size: 11px;
@@ -297,54 +370,46 @@
       border-bottom: 2px solid transparent;
       transition: all 0.2s;
     }
+    .tab-btn:hover { color: var(--navy); }
     .tab-btn.active {
       color: var(--teal);
       border-bottom-color: var(--teal);
       background: #FFFFFF;
     }
 
-    /* Search Bar */
-    .search-box {
-      margin-bottom: 10px;
-      position: relative;
-    }
-    .search-box input {
-      width: 100%;
-      padding: 7px 10px 7px 28px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 12px;
-      outline: none;
-      color: var(--navy);
-      background: var(--bg-light);
-    }
-    .search-box input:focus { border-color: var(--teal); background: #fff; }
-    .search-icon {
-      position: absolute;
-      left: 9px;
-      top: 8px;
-      font-size: 12px;
-      color: var(--slate-500);
-    }
-
-    /* List Rows & Cards */
+    /* Dynamic Content Container */
     .list-container {
+      flex: 1;
+      min-height: 180px;
       max-height: 250px;
       overflow-y: auto;
       border: 1px solid var(--border);
       border-radius: 6px;
+      background: #FFFFFF;
     }
+
+    /* List Rows & Item Cards */
     .list-row {
       padding: 9px 12px;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      transition: background 0.15s;
     }
     .list-row:last-child { border-bottom: none; }
     .list-row:hover { background: var(--bg-light); }
     .item-sku { font-weight: 700; font-size: 12px; color: var(--navy); }
-    .item-name { font-size: 11px; color: var(--slate-500); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-name {
+      font-size: 11px;
+      color: var(--slate-500);
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Badges */
     .badge {
       display: inline-block;
       padding: 2px 6px;
@@ -352,12 +417,62 @@
       font-size: 9px;
       font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
     .badge-green { background: var(--green-bg); color: var(--green-text); }
     .badge-amber { background: var(--amber-bg); color: var(--amber-text); }
     .badge-rose { background: var(--rose-bg); color: var(--rose-text); }
+    .badge-blue { background: var(--blue-bg); color: var(--blue-text); }
+    .badge-teal { background: var(--teal-light); color: var(--teal); border: 1px solid rgba(13, 148, 136, 0.2); }
 
-    /* Alert & Transfer Cards */
+    /* Rich Product Intelligence Detail Card */
+    .product-intelligence-card {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: #FFFFFF;
+    }
+    .product-intelligence-card:last-child { border-bottom: none; }
+    .pi-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+    .pi-title { font-weight: 700; font-size: 12px; color: var(--navy); }
+    .pi-sku { font-size: 10px; font-weight: 600; color: var(--slate-500); font-family: monospace; }
+    .pi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      background: var(--bg-light);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .pi-metric-val { font-size: 12px; font-weight: 700; color: var(--navy); }
+    .pi-metric-lbl { font-size: 9px; color: var(--slate-500); text-transform: uppercase; font-weight: 600; }
+    .pi-subtable {
+      font-size: 10px;
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+    .pi-subtable th {
+      text-align: left;
+      font-weight: 700;
+      color: var(--slate-500);
+      padding: 3px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pi-subtable td {
+      padding: 3px 4px;
+      border-bottom: 1px solid #F1F5F9;
+      color: var(--slate-700);
+    }
+
+    /* Alert and Transfer Cards */
     .card-item {
       padding: 9px 12px;
       border-bottom: 1px solid var(--border);
@@ -370,24 +485,26 @@
       margin-bottom: 4px;
     }
     .card-title { font-weight: 700; font-size: 11px; }
-    .card-desc { font-size: 11px; color: var(--slate-500); }
+    .card-desc { font-size: 11px; color: var(--slate-500); line-height: 1.35; }
 
-    /* Approve Button */
+    /* Action Buttons */
     .btn-action-small {
       padding: 4px 10px;
       background: var(--teal);
-      color: #fff;
+      color: #FFFFFF;
       border: none;
       border-radius: 4px;
       font-size: 10px;
       font-weight: 700;
       cursor: pointer;
+      transition: background 0.2s;
     }
-    .btn-action-small:hover { background: #0F766E; }
+    .btn-action-small:hover { background: var(--teal-hover); }
+    .btn-action-small:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* Empty States */
     .empty-state {
-      padding: 24px 12px;
+      padding: 28px 16px;
       text-align: center;
       color: var(--slate-500);
       font-size: 11px;
@@ -395,15 +512,15 @@
 
     /* Footer Deep Links */
     footer {
-      margin-top: 14px;
-      padding-top: 10px;
+      margin-top: 10px;
+      padding-top: 8px;
       border-top: 1px solid var(--border);
       display: flex;
       gap: 6px;
     }
     .footer-btn {
       flex: 1;
-      padding: 7px;
+      padding: 6px;
       background: var(--bg-light);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -421,11 +538,11 @@
       color: var(--teal);
     }
 
-    /* Modal Dialog */
+    /* Confirmation Modal */
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15, 23, 42, 0.6);
+      background: rgba(15, 23, 42, 0.65);
       display: none;
       align-items: center;
       justify-content: center;
@@ -438,10 +555,10 @@
       padding: 16px;
       width: 100%;
       max-width: 360px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
     }
-    .modal-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
-    .modal-body { font-size: 11px; color: var(--slate-700); margin-bottom: 14px; line-height: 1.4; }
+    .modal-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    .modal-body { font-size: 11px; color: var(--slate-700); margin-bottom: 14px; line-height: 1.45; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
   </style>
 </head>
@@ -449,11 +566,11 @@
   <!-- Header -->
   <header>
     <div class="brand-wrap">
-      <div class="pulse-dot" id="pulseDot"></div>
+      <div class="pulse-dot" id="pulseDot" title="Live Server Connection"></div>
       <div class="brand-title">StockPilot AI</div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="headerDashboardBtn" title="Open StockPilot Web Dashboard">📊</button>
+      <button class="icon-btn" id="headerDashboardBtn" title="Launch StockPilot Web Console">📊</button>
       <div id="authHeader" style="display: none;">
         <div class="user-pill">
           <span id="headerUserName">User</span>
@@ -465,21 +582,38 @@
     </div>
   </header>
 
-  <!-- Banner Alerts -->
+  <!-- Synchronization & Heartbeat Bar -->
+  <div class="sync-status-bar" id="syncStatusBar" style="display: none;">
+    <span id="syncStatusText">Connected • Authoritative Ledger</span>
+    <span id="syncTimestamp">Last synced: Just now</span>
+  </div>
+
+  <!-- Dynamic Notification Banners -->
   <div id="bannerContainer"></div>
 
-  <!-- Settings Host Modal View -->
-  <div class="view-container" id="configView" style="display: none; background: #FFFBEB; border-bottom: 1px solid #FDE68A;">
-    <div style="font-weight: 700; font-size: 12px; margin-bottom: 4px; color: var(--navy);">Endpoint Environment Configuration</div>
-    <div style="font-size: 11px; color: var(--slate-700); margin-bottom: 8px;">Configure deployed or development service origins (HTTPS supported):</div>
-    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;">
+  <!-- Page Context Detection Bar (when viewing supported StockPilot page) -->
+  <div class="context-detected-bar" id="contextDetectedBar" style="display: none;">
+    <div class="context-detected-text">
+      Detected on page: <strong id="contextDetectedIdentifier">PRD-VAX-01</strong>
+    </div>
+    <div style="display: flex; gap: 4px;">
+      <button class="context-action-btn" id="contextInspectBtn">Inspect SKU</button>
+      <button class="icon-btn" id="contextDismissBtn" style="color: #166534; font-size: 11px;" title="Dismiss">✕</button>
+    </div>
+  </div>
+
+  <!-- Host Endpoint Configuration View -->
+  <div id="configView" style="display: none;">
+    <div style="font-weight: 700; font-size: 12px; margin-bottom: 4px; color: var(--navy);">Service Origins Configuration</div>
+    <div style="font-size: 11px; color: var(--slate-700); margin-bottom: 8px;">Configure backend REST API and Web Dashboard endpoints:</div>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
       <div>
         <label style="font-size: 10px; font-weight: 700; color: var(--slate-700); display: block; margin-bottom: 2px;">Backend API Endpoint</label>
-        <input type="text" id="customApiBase" class="form-control" style="font-family: monospace; font-size: 11px; padding: 5px 8px;" placeholder="http://localhost:8000/api/v1" />
+        <input type="text" id="customApiBase" class="form-control" style="font-family: monospace; font-size: 11px;" placeholder="http://localhost:8000/api/v1" />
       </div>
       <div>
         <label style="font-size: 10px; font-weight: 700; color: var(--slate-700); display: block; margin-bottom: 2px;">Web Console Origin</label>
-        <input type="text" id="customWebBase" class="form-control" style="font-family: monospace; font-size: 11px; padding: 5px 8px;" placeholder="http://localhost:5173" />
+        <input type="text" id="customWebBase" class="form-control" style="font-family: monospace; font-size: 11px;" placeholder="http://localhost:5173" />
       </div>
     </div>
     <div style="display: flex; justify-content: flex-end; gap: 6px;">
@@ -492,16 +626,16 @@
   <div class="view-container" id="authView">
     <div class="auth-card">
       <div class="auth-title">Logistics Gateway Login</div>
-      <div class="auth-subtitle">Sign in with verified server credentials to access role-authorized companion controls.</div>
+      <div class="auth-subtitle">Sign in with authorized organization credentials to access companion controls.</div>
       
       <form id="loginForm">
         <div class="form-group">
           <label>Email Address</label>
-          <input type="email" id="loginEmail" class="form-control" value="operator@stockpilot.ai" placeholder="operator@stockpilot.ai" required />
+          <input type="email" id="loginEmail" class="form-control" placeholder="e.g. operator@stockpilot.ai" required autocomplete="username" />
         </div>
         <div class="form-group">
           <label>Password</label>
-          <input type="password" id="loginPassword" class="form-control" value="Admin123!" placeholder="••••••••" required />
+          <input type="password" id="loginPassword" class="form-control" placeholder="Enter password" required autocomplete="current-password" />
         </div>
         <button type="submit" class="btn-primary" id="loginBtn">
           Authenticate Session
@@ -515,18 +649,9 @@
     <!-- Facility Selection Bar -->
     <div class="facility-row">
       <select id="warehouseSelect" class="facility-select">
-        <option value="wh_chicago_01">Central Hub Chicago</option>
+        <option value="">Loading facilities...</option>
       </select>
-      <button class="btn-action-small" id="refreshBtn" title="Sync live records">↻ Sync</button>
-    </div>
-
-    <!-- Role Context Banner -->
-    <div class="role-context-bar">
-      <div>
-        <div class="role-context-title" id="roleContextTitle">Warehouse Operator Workspace</div>
-        <div class="role-context-sub" id="roleContextSubtitle">Assigned Hub Operations</div>
-      </div>
-      <span class="badge badge-green" id="roleContextBadge">AUTHORIZED</span>
+      <button class="btn-action-small" id="refreshBtn" title="Sync authoritative records">↻ Sync</button>
     </div>
 
     <!-- Live KPI Metrics Strip -->
@@ -549,43 +674,41 @@
       </div>
     </div>
 
+    <!-- Primary Context Search Bar -->
+    <div class="search-box-wrap" id="searchBoxWrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="skuSearchInput" placeholder="Search SKU, item name, barcode, or batch..." autocomplete="off" />
+      <button type="button" class="search-clear-btn" id="searchClearBtn" title="Clear search">✕</button>
+    </div>
+
     <!-- Dynamic Role Tab Bar -->
     <div class="tab-bar" id="roleTabBar">
       <!-- Injected dynamically by role in popup.js -->
     </div>
 
-    <!-- Active Content Area Container -->
-    <div id="tabContentArea">
-      <!-- Search Box (always available for quick lookups) -->
-      <div class="search-box" id="searchBoxWrap">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="skuSearchInput" placeholder="Quick search SKU, batch or item..." />
-      </div>
-
-      <!-- Main Dynamic Content Container -->
-      <div class="list-container" id="mainListContainer">
-        <!-- Injected via safe DOM rendering -->
-      </div>
+    <!-- Dynamic Content Area -->
+    <div class="list-container" id="mainListContainer">
+      <!-- Injected via safe DOM rendering -->
     </div>
 
     <!-- Deep Link Footer -->
     <footer>
       <button type="button" class="footer-btn" id="openWebConsoleBtn">
-        Open Web Dashboard ↗
+        Open Web Console ↗
       </button>
       <button type="button" class="footer-btn" id="openExpressLaneBtn">
-        Express Lane SOS ⚡
+        Express SOS ⚡
       </button>
     </footer>
   </div>
 
-  <!-- Confirmation Modal -->
+  <!-- Action Confirmation Modal -->
   <div class="modal-overlay" id="confirmModal">
     <div class="modal-card">
       <div class="modal-title" id="modalTitle">Confirm Action</div>
       <div class="modal-body" id="modalBody">Are you sure you want to proceed?</div>
       <div class="modal-actions">
-        <button class="footer-btn" id="modalCancelBtn">Cancel</button>
+        <button class="footer-btn" id="modalCancelBtn" style="flex: none; padding: 4px 10px;">Cancel</button>
         <button class="btn-action-small" id="modalConfirmBtn">Confirm & Execute</button>
       </div>
     </div>

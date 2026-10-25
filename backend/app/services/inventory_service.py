@@ -1034,6 +1034,7 @@ class InventoryService:
                         store.set_document("inventory", inv_key, inv)
 
             store.set_document("transfers", transfer_id, trf)
+            return trf
         res = db.run_transaction(txn)
         from app.services.firebase_service import FirebaseService
         FirebaseService.sync_to_firestore("transfers", transfer_id, res)

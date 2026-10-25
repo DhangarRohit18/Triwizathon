@@ -125,12 +125,46 @@ def get_extension_summary(
     # IoT Excursion Alerts (scoped by authorized facilities for warehouse managers)
     raw_alerts = db.query("alerts", filters={"acknowledged": False}, org_id=org_id, order_by="timestamp", descending=True, limit=10)
     if allowed_whs is not None:
-        alerts = [
+        scoped_alerts = [
             a for a in raw_alerts
             if not a.get("warehouse_id") or a.get("warehouse_id") in allowed_whs
         ]
     else:
-        alerts = raw_alerts
+        scoped_alerts = raw_alerts
+
+    now_utc = datetime.now(timezone.utc)
+    formatted_alerts = []
+    for a in scoped_alerts:
+        a_wh = db.get_document("warehouses", a.get("warehouse_id", ""))
+        # Check staleness: alert timestamp > 2 hours ago
+        is_stale = False
+        ts_str = a.get("last_seen_at") or a.get("timestamp")
+        if ts_str:
+            try:
+                alert_time = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                is_stale = (now_utc - alert_time).total_seconds() > 7200
+            except Exception:
+                pass
+        
+        is_sim = a.get("is_simulated", False)
+        formatted_alerts.append({
+            "id": a.get("id"),
+            "alert_type": a.get("alert_type", "excursion"),
+            "severity": a.get("severity", "MEDIUM"),
+            "message": a.get("message", "Telemetry excursion detected"),
+            "reading_value": a.get("reading_value"),
+            "threshold_value": a.get("threshold_value"),
+            "timestamp": ts_str,
+            "warehouse_id": a.get("warehouse_id"),
+            "warehouse_name": a_wh.get("name", a.get("warehouse_id")) if a_wh else a.get("warehouse_id", "Central Hub"),
+            "storage_zone": a.get("storage_zone", "Cold Zone"),
+            "device_id": a.get("device_id", "ESP32-WH-01"),
+            "is_simulated": is_sim,
+            "source_label": "SIMULATED LAB" if is_sim else "ESP32 LIVE",
+            "is_stale": is_stale,
+            "repeat_count": a.get("repeat_count", 1)
+        })
+    alerts = formatted_alerts
 
     # Pending transfers (scoped by authorized facilities)
     pending_transfers = db.query("transfers", filters={"status": "pending"}, org_id=org_id, limit=10)
@@ -208,24 +242,163 @@ def extension_quick_search(
     q: str = Query(..., min_length=1),
     current_user: dict = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
-    """Quick SKU, name, or batch search with cross-warehouse availability."""
+    """
+    Context-aware multi-attribute search across SKU, product name, barcode, and batch identifiers.
+    Enforces tenant isolation and authorized warehouse visibility.
+    Returns authoritative stock quantities, safety stock, FEFO batch expiry dates, and warehouse breakdown.
+    """
     org_id = current_user["org_id"]
+    q_clean = q.strip()
+    q_lower = q_clean.lower()
+
     products = db.query("products", org_id=org_id)
-    q_lower = q.lower()
+    batches = db.query("inventory_batches", org_id=org_id)
+    warehouses_map = {w["id"]: w for w in db.query("warehouses", org_id=org_id)}
+
+    # Check authorized warehouses for this user
+    auth_whs = get_authorized_warehouses(current_user)
+
+    # Pre-index batches by product_id
+    batches_by_product: Dict[str, List[dict]] = {}
+    matched_product_ids_from_batches = set()
+    today = datetime.now(timezone.utc).date()
+
+    for b in batches:
+        b_wh = b.get("warehouse_id")
+        if auth_whs is not None and b_wh not in auth_whs:
+            continue
+
+        pid = b.get("product_id")
+        if not pid:
+            continue
+
+        b_num = b.get("batch_number", "")
+        b_supp = b.get("supplier_reference", "")
+        if q_lower in b_num.lower() or q_lower in b_supp.lower():
+            matched_product_ids_from_batches.add(pid)
+
+        batches_by_product.setdefault(pid, []).append(b)
+
     matches = []
     for p in products:
-        if q_lower in p["sku"].lower() or q_lower in p["name"].lower():
-            invs = db.query("inventory", filters={"product_id": p["id"]}, org_id=org_id)
-            total_avail = sum(i.get("available_quantity", 0) for i in invs)
-            matches.append({
-                "product_id": p["id"],
-                "sku": p["sku"],
-                "name": p["name"],
-                "handling": p.get("handling", "standard"),
-                "total_available": total_avail,
-                "unit": p.get("unit", "units")
+        pid = p["id"]
+        sku = p.get("sku", "")
+        name = p.get("name", "")
+        barcode = p.get("barcode", "")
+
+        matches_query = (
+            q_lower in sku.lower()
+            or q_lower in name.lower()
+            or (barcode and q_lower in barcode.lower())
+            or (pid in matched_product_ids_from_batches)
+        )
+        if not matches_query:
+            continue
+
+        # Retrieve inventory items for this product
+        inv_items = db.query("inventory", filters={"product_id": pid}, org_id=org_id)
+        if auth_whs is not None:
+            inv_items = [i for i in inv_items if i.get("warehouse_id") in auth_whs]
+
+        total_avail = sum(i.get("available_quantity", 0) for i in inv_items)
+        total_res = sum(i.get("reserved_quantity", 0) for i in inv_items)
+
+        # Build warehouse breakdown
+        wh_breakdown = []
+        for i in inv_items:
+            wid = i.get("warehouse_id")
+            w_doc = warehouses_map.get(wid, {})
+            wh_breakdown.append({
+                "warehouse_id": wid,
+                "warehouse_name": w_doc.get("name", wid),
+                "city": w_doc.get("city", ""),
+                "available": i.get("available_quantity", 0),
+                "reserved": i.get("reserved_quantity", 0),
             })
+
+        # Process and sort batches for FEFO
+        p_batches = batches_by_product.get(pid, [])
+        formatted_batches = []
+        for b in p_batches:
+            exp_str = b.get("expiry_date", "")
+            days_remaining = None
+            is_near_expiry = False
+            if exp_str:
+                try:
+                    exp_date = datetime.strptime(exp_str[:10], "%Y-%m-%d").date()
+                    days_remaining = (exp_date - today).days
+                    is_near_expiry = days_remaining <= 60
+                except Exception:
+                    pass
+            w_doc = warehouses_map.get(b.get("warehouse_id"), {})
+            formatted_batches.append({
+                "batch_id": b.get("id"),
+                "batch_number": b.get("batch_number", "Unknown"),
+                "warehouse_id": b.get("warehouse_id"),
+                "warehouse_name": w_doc.get("name", b.get("warehouse_id")),
+                "quantity": b.get("quantity", 0),
+                "expiry_date": exp_str[:10] if exp_str else None,
+                "days_remaining": days_remaining,
+                "is_near_expiry": is_near_expiry,
+                "storage_bin": b.get("storage_bin", "General"),
+            })
+
+        # Sort batches FEFO: earliest expiry first, None at the end
+        formatted_batches.sort(key=lambda x: x["days_remaining"] if x["days_remaining"] is not None else 99999)
+
+        reorder_pt = p.get("reorder_point", 500)
+        safety_stk = p.get("min_safety_stock", 200)
+
+        if total_avail <= 0:
+            stock_status = "CRITICAL_STOCKOUT"
+        elif total_avail < safety_stk:
+            stock_status = "CRITICAL_LOW"
+        elif total_avail < reorder_pt:
+            stock_status = "LOW_STOCK"
+        else:
+            stock_status = "OPTIMAL"
+
+        matches.append({
+            "product_id": pid,
+            "sku": sku,
+            "name": name,
+            "category": p.get("category", "General"),
+            "handling": p.get("handling", "standard"),
+            "unit": p.get("unit", "units"),
+            "barcode": barcode,
+            "total_available": total_avail,
+            "total_reserved": total_res,
+            "min_safety_stock": safety_stk,
+            "reorder_point": reorder_pt,
+            "stock_status": stock_status,
+            "warehouses": wh_breakdown,
+            "batches": formatted_batches[:6],
+            "source_timestamp": datetime.now(timezone.utc).isoformat(),
+            "web_console_url": f"/inventory?sku={sku}"
+        })
+
     return matches
+
+@router.get("/tasks")
+def extension_get_tasks(
+    warehouse_id: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    current_user: dict = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    """Scoped warehouse floor tasks for the extension companion."""
+    from app.api.v1.tasks import list_tasks
+    return list_tasks(warehouse_id=warehouse_id, status_filter=status_filter, current_user=current_user)
+
+@router.post("/tasks/{task_id}/complete")
+def extension_complete_task(
+    task_id: str,
+    notes: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """Complete a warehouse task directly from the extension."""
+    from app.api.v1.tasks import complete_task, TaskCompleteRequest
+    req = TaskCompleteRequest(notes=notes or "Completed via Chrome Extension companion")
+    return complete_task(task_id=task_id, req=req, current_user=current_user)
 
 @router.post("/approve-transfer/{transfer_id}")
 def extension_approve_transfer(
