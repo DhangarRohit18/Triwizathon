@@ -531,7 +531,10 @@ function renderStockTab(items) {
 async function renderTasksTab() {
   renderEmpty("Loading warehouse operational tasks...");
   try {
-    const tasks = await apiFetch("/extension/tasks");
+    const path = activeWarehouseId
+      ? `/extension/tasks?warehouse_id=${encodeURIComponent(activeWarehouseId)}`
+      : "/extension/tasks";
+    const tasks = await apiFetch(path);
     mainListContainer.innerHTML = "";
     if (!tasks || tasks.length === 0) {
       renderEmpty("✓ No pending warehouse floor tasks for this hub.");
