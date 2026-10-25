@@ -466,5 +466,62 @@ class InventoryRepository {
 
     return syncedCount;
   }
+
+  // ---------------------------------------------------------------------------
+  // RuralReach Mode API Endpoints
+  // ---------------------------------------------------------------------------
+  Future<Map<String, dynamic>> downloadRuralReachSnapshot({String? warehouseId}) async {
+    final query = warehouseId != null && warehouseId != 'all' ? {'warehouse_id': warehouseId} : null;
+    final res = await apiClient.get('/ruralreach/snapshot', queryParameters: query);
+    final data = res.data as Map<String, dynamic>;
+    await localStorage.saveRuralReachSnapshot(data);
+    return data;
+  }
+
+  Future<Map<String, dynamic>> syncRuralReachBatch({required String warehouseId}) async {
+    final queue = localStorage.getPendingQueue();
+    if (queue.isEmpty) {
+      return {
+        'success': true,
+        'synced_count': 0,
+        'conflict_count': 0,
+        'results': [],
+      };
+    }
+
+    final transactions = queue.map((op) {
+      final action = (op['action'] as String? ?? 'RECEIVE').toUpperCase();
+      final payload = op['payload'] as Map<String, dynamic>? ?? {};
+      final correlationId = op['correlation_id'] ?? 'MOB-RR-${_uuid.v4().substring(0, 8)}';
+      return {
+        'transaction_id': correlationId,
+        'action': action,
+        'payload': payload,
+        'timestamp': op['timestamp'] ?? DateTime.now().toIso8601String(),
+        'client_notes': 'Mobile RuralReach sync',
+      };
+    }).toList();
+
+    final syncPayload = {
+      'device_id': 'mobile-${_uuid.v4().substring(0, 8)}',
+      'warehouse_id': warehouseId,
+      'client_sync_time': DateTime.now().toIso8601String(),
+      'transactions': transactions,
+    };
+
+    final res = await apiClient.post('/ruralreach/sync', data: syncPayload);
+    final outcome = res.data as Map<String, dynamic>;
+
+    final results = outcome['results'] as List? ?? [];
+    for (final r in results) {
+      final status = r['status'] as String?;
+      final txnId = r['transaction_id'] as String?;
+      if ((status == 'COMMITTED' || status == 'ALREADY_COMMITTED') && txnId != null) {
+        await localStorage.removeOperation(txnId);
+      }
+    }
+
+    return outcome;
+  }
 }
 

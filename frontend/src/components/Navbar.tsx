@@ -153,6 +153,15 @@ export const Navbar: React.FC = () => {
 
       {/* Right Controls: Role Switcher, Online Status, User Profile */}
       <div className="flex items-center gap-3">
+        {/* RuralReach Mode Direct Action Launcher */}
+        <Link
+          to="/ruralreach"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[11px] font-mono font-bold text-emerald-800 transition-colors shadow-xs"
+          title="Switch to Offline-First RuralReach Mode"
+        >
+          <span>🌾 RuralReach</span>
+        </Link>
+
         {/* Real-time System Connectivity Badge */}
         <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-[#17324D]/15 text-[11px] font-mono font-semibold text-[#17324D]">
           <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-[#0D9488]' : 'bg-red-500'}`} />

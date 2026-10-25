@@ -15,7 +15,8 @@ import {
   Server,
   Building2,
   LogIn,
-  Zap
+  Zap,
+  Radio
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { RoleType } from '../types';
@@ -180,6 +181,14 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: ScanLine, 
     badge: 'CAMERA',
     allowedRoles: ['operator'] 
+  },
+  // Universal RuralReach Mode Access for field & depot operations
+  { 
+    to: '/ruralreach', 
+    label: 'RuralReach Offline Hub', 
+    icon: Radio, 
+    badge: 'OFFLINE',
+    allowedRoles: ['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager', 'distributor', 'operator'] 
   },
 ];
 

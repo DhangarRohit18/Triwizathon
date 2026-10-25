@@ -17,6 +17,7 @@ import { WhatsAppPage } from './pages/WhatsAppPage';
 import { UsersPage } from './pages/UsersPage';
 import { LoginPage } from './pages/LoginPage';
 import { ExpressLanePage } from './pages/ExpressLanePage';
+import { RuralReachPage } from './pages/RuralReachPage';
 
 import { api } from './services/api';
 
@@ -152,6 +153,14 @@ export const App: React.FC = () => {
                       element={
                         <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager']}>
                           <ExpressLanePage />
+                        </RoleGuard>
+                      } 
+                    />
+                    <Route 
+                      path="/ruralreach" 
+                      element={
+                        <RoleGuard allowedRoles={['super_admin', 'org_admin', 'supply_chain_manager', 'warehouse_manager', 'distributor', 'operator']}>
+                          <RuralReachPage />
                         </RoleGuard>
                       } 
                     />
