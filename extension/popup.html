@@ -200,26 +200,30 @@
 
     .btn-dashboard {
       width: 100%;
-      padding: 10px 14px;
-      background: var(--teal-light);
-      color: var(--teal);
-      border: 1.5px solid rgba(13, 148, 136, 0.35);
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
+      padding: 12px 16px;
+      min-height: 44px;
+      background: var(--navy);
+      color: #FFFFFF;
+      border: 1.5px solid var(--navy);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 10px;
       transition: all 0.2s ease;
       text-decoration: none;
+      box-shadow: 0 4px 10px rgba(23, 50, 77, 0.18);
     }
     .btn-dashboard:hover {
       background: var(--teal);
       border-color: var(--teal);
       color: #FFFFFF;
-      box-shadow: 0 3px 8px rgba(13, 148, 136, 0.25);
+      box-shadow: 0 6px 14px rgba(13, 148, 136, 0.35);
+      transform: translateY(-1px);
     }
     .btn-dashboard:active {
       transform: translateY(1px);
@@ -570,20 +574,33 @@
       </form>
 
       <!-- Quick Web Dashboard Launch -->
-      <div class="dashboard-shortcut-wrap" style="margin-top: 14px; text-align: center;">
+      <div class="dashboard-shortcut-wrap" style="margin-top: 16px; text-align: center;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
           <div style="flex: 1; height: 1px; background: var(--border);"></div>
-          <span style="font-size: 10px; color: var(--slate-500); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">OR</span>
+          <span style="font-size: 10px; color: var(--slate-500); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">OR LAUNCH WEB CONSOLE</span>
           <div style="flex: 1; height: 1px; background: var(--border);"></div>
         </div>
-        <button type="button" class="btn-dashboard" id="authOpenDashboardBtn">
-          <span style="font-size: 14px;">📊</span>
-          <span>Open Web Dashboard</span>
-          <span style="font-size: 11px; opacity: 0.85;">↗</span>
-        </button>
-        <div style="font-size: 10px; color: var(--slate-500); margin-top: 8px;">
-          Directly launch full StockPilot AI web console in a new browser tab
+        <a href="http://localhost:5173/" target="_blank" rel="noopener noreferrer" class="btn-dashboard" id="authOpenDashboardBtn" role="button">
+          <span style="font-size: 16px;">📊</span>
+          <span>Open Full Web Dashboard</span>
+          <span style="font-size: 13px; opacity: 0.9; margin-left: auto;">↗</span>
+        </a>
+        <div style="font-size: 10px; color: var(--slate-500); margin-top: 8px; line-height: 1.4;">
+          Instant 1-click redirect to full StockPilot command center
         </div>
+      </div>
+
+      <!-- Quick Role Sign-in Shortcuts -->
+      <div class="dev-accounts-title" style="margin-top: 16px;">Quick Role Companion Access</div>
+      <div class="dev-grid">
+        <button type="button" class="dev-btn" data-email="whmanager@stockpilot.ai">
+          <strong>Warehouse Mgr</strong>
+          <span>David Sterling (Cold-Chain)</span>
+        </button>
+        <button type="button" class="dev-btn" data-email="operator@stockpilot.ai">
+          <strong>Hub Operator</strong>
+          <span>Alex Rivera (Dispatch)</span>
+        </button>
       </div>
     </div>
   </div>

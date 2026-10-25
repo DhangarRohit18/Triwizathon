@@ -230,9 +230,21 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-mono text-[#17324D]/70 bg-[#17324D]/5 px-3 py-1.5 rounded-lg border border-[#17324D]/15">
-            <ShieldCheck className="w-4 h-4 text-[#0D9488]" />
-            <span>Strict Role-Based Isolation Active</span>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-[#17324D]/70 bg-[#17324D]/5 px-3 py-1.5 rounded-lg border border-[#17324D]/15">
+              <ShieldCheck className="w-4 h-4 text-[#0D9488]" />
+              <span>Strict Role-Based Isolation Active</span>
+            </div>
+            <TactileButton
+              variant="primary"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 text-xs font-mono font-bold py-2 px-4 shadow-sm"
+              title="Return directly to Active Dashboard"
+            >
+              <Compass className="w-4 h-4 text-[#0D9488]" />
+              <span>Go to Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+            </TactileButton>
           </div>
         </div>
 

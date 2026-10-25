@@ -133,18 +133,26 @@ function setOnline(isOnline) {
 // Reliable URL opener for Chrome Extension (MV3 tabs API or window.open fallback)
 function openExternalUrl(url) {
   try {
-    if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
-      chrome.tabs.create({ url });
-    } else {
-      window.open(url, "_blank");
+    if (typeof chrome !== "undefined" && chrome.tabs && typeof chrome.tabs.create === "function") {
+      chrome.tabs.create({ url, active: true }, (createdTab) => {
+        if (chrome.runtime.lastError) {
+          window.open(url, "_blank");
+        }
+      });
+      return;
     }
   } catch (err) {
-    console.error("Failed to open external URL:", err);
-    window.open(url, "_blank");
+    console.warn("chrome.tabs.create error, using window.open:", err);
+  }
+  const win = window.open(url, "_blank");
+  if (!win) {
+    window.location.href = url;
   }
 }
 
 function updateFooterLinks() {
+  const authOpenDashboardBtn = document.getElementById("authOpenDashboardBtn");
+  if (authOpenDashboardBtn) authOpenDashboardBtn.href = `${webBase}/`;
   if (openWebConsoleBtn && openWebConsoleBtn.tagName === "A") openWebConsoleBtn.href = `${webBase}/`;
   if (openExpressLaneBtn && openExpressLaneBtn.tagName === "A") openExpressLaneBtn.href = `${webBase}/express`;
 }
@@ -874,26 +882,48 @@ warehouseSelect.onchange = () => {
 };
 
 if (authOpenDashboardBtn) {
-  authOpenDashboardBtn.onclick = () => openExternalUrl(`${webBase}/`);
+  authOpenDashboardBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    openExternalUrl(`${webBase}/`);
+  });
 }
 
 if (headerDashboardBtn) {
-  headerDashboardBtn.onclick = () => openExternalUrl(`${webBase}/`);
+  headerDashboardBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    openExternalUrl(`${webBase}/`);
+  });
 }
 
 if (openWebConsoleBtn) {
-  openWebConsoleBtn.onclick = (e) => {
+  openWebConsoleBtn.addEventListener("click", (e) => {
     e.preventDefault();
     openExternalUrl(`${webBase}/`);
-  };
+  });
 }
 
 if (openExpressLaneBtn) {
-  openExpressLaneBtn.onclick = (e) => {
+  openExpressLaneBtn.addEventListener("click", (e) => {
     e.preventDefault();
     openExternalUrl(`${webBase}/express`);
-  };
+  });
 }
+
+// Quick Role Persona Buttons
+document.querySelectorAll(".dev-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const email = btn.getAttribute("data-email");
+    if (email) {
+      loginEmail.value = email;
+      loginPassword.value = "Admin123!";
+      if (typeof loginForm.requestSubmit === "function") {
+        loginForm.requestSubmit();
+      } else {
+        loginForm.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    }
+  });
+});
 
 configToggleBtn.onclick = () => {
   configView.style.display = configView.style.display === "none" ? "block" : "none";
